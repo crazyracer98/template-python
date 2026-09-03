@@ -178,6 +178,16 @@ The top-level `Dockerfile` has three stages — `develop`, `builder`,
 layers minimal; put new stage-specific setup logic in that stage's
 script, not inline in the Dockerfile.
 
+## Cache directories
+
+`ruff`, `mypy`, and `pytest` all point their cache dirs at
+`/home/vscode/.cache/<tool>` (set once each, in `pyproject.toml`'s
+`[tool.ruff]`/`[tool.mypy]`/`[tool.pytest.ini_options]`) instead of the
+project root. Same reasoning as the Dockerfile's `.venv` placement: a
+cache inside the bind-mounted `/workspace` gets scanned file-by-file by
+host antivirus/malware tools on Windows and is painfully slow to write
+to. A new tool with its own on-disk cache follows the same pattern.
+
 ## Configuration
 
 No application `.env` file: `src/app/config.py` reads settings from the

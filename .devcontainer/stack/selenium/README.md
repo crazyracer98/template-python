@@ -15,6 +15,9 @@ container from the host.
 - Reached from: `tests/e2e/conftest.py`, at `http://selenium:4444`
   (overridable via `E2E_SELENIUM_URL`)
 - Target under test: `http://api:8000` (via `E2E_BASE_URL`)
+- Also reached from: Claude's `playwright` MCP server, the same way —
+  see `../../../.claude/mcp/playwright_selenium_bridge.py` and
+  `../../../.claude/README.md`.
 
 ## Do
 
@@ -42,5 +45,7 @@ container from the host.
 Delete this directory, its compose file entry in
 `.devcontainer/compose.yml`'s `include:` list, the `browser` fixture
 override in `tests/e2e/conftest.py`, the Playwright/selenium packages
-from the `dev` optional-dependency group in `pyproject.toml`, and
-`tests/e2e/`.
+from the `dev` optional-dependency group in `pyproject.toml`,
+`tests/e2e/`, and the `playwright` MCP server entry plus
+`../../../.claude/mcp/playwright_selenium_bridge.py` (see
+`../../../.claude/README.md`'s "Removing a tool").

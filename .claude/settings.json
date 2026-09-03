@@ -4,7 +4,19 @@
     "pr": ""
   },
   "enabledPlugins": {
-    "pyright-lsp@claude-plugins-official": true
+    "pyright-lsp@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "mcp__s3-mcp__put_object",
+      "mcp__s3-mcp__delete_object",
+      "mcp__s3-mcp__copy_object",
+      "mcp__s3-mcp__create_bucket",
+      "mcp__s3-mcp__delete_bucket",
+      "mcp__s3-mcp__presign_put"
+    ]
   },
   "hooks": {
     "PostToolUse": [

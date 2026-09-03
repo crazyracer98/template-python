@@ -17,9 +17,14 @@ template uses RustFS instead.
 ## Do
 
 - Use these default credentials for local development only.
-- Reach the console at `http://s3:9001` from a tool running inside the
-  devcontainer network (e.g. the S3 browsing extension configured in
-  `.vscode/settings.json`) rather than publishing the port to the host.
+- Reach the console at `http://s3:9001`, or the API at `http://s3:9000`,
+  from a tool running inside the devcontainer network rather than
+  publishing a port to the host: the S3 browsing extension configured in
+  `.vscode/settings.json`, the `rc` CLI (RustFS's own, installed by
+  `scripts/develop.sh` — run `rc alias set local http://s3:9000
+  $RUSTFS_ACCESS_KEY $RUSTFS_SECRET_KEY` once per shell), or Claude's
+  `s3-mcp` MCP server (`../../../.mcp.json` — see
+  `../../../.claude/README.md`).
 
 ## Don't
 

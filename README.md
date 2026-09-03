@@ -9,6 +9,8 @@ setup composed from independent, swappable pieces.
 - `.github/` — CI and release workflows; see its `CONTENTS.md`.
 - `.vscode/` — editor settings, tasks, launch config; see its `README.md`.
 - `.claude/` — Claude Code CLI project config; see its `README.md`.
+- `.mcp.json` — project-scope MCP servers not covered by a
+  `.claude/settings.json` plugin; see `.claude/README.md`.
 - `src/` — the application source; see its `README.md`.
 - `tests/` — automated tests, split into `unit/`, `integration/`, and
   `e2e/` (Playwright) suites; see its `README.md`.

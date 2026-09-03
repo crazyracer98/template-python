@@ -15,8 +15,10 @@ PostgreSQL 16, used as the primary application database.
 
 - Use these default credentials for local development only.
 - Reach this service from a tool running inside the devcontainer network
-  (e.g. the Postgres browsing extension configured in
-  `.vscode/settings.json`) rather than publishing the port to the host.
+  rather than publishing the port to the host: the Postgres browsing
+  extension configured in `.vscode/settings.json`, the `psql` CLI
+  (installed by `scripts/develop.sh`), or Claude's `postgres` MCP server
+  (`../../../.mcp.json` — see `../../../.claude/README.md`).
 
 ## Don't
 

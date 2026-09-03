@@ -21,6 +21,9 @@ ARG PYRIGHT_VERSION=1.1.411
 # renovate: datasource=github-releases depName=edouard-claude/snip
 ARG SNIP_VERSION=0.25.0
 
+# renovate: datasource=github-releases depName=rustfs/cli
+ARG RUSTFS_CLI_VERSION=0.1.32
+
 ARG APP_UID=1000
 
 ARG SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
@@ -35,6 +38,7 @@ ARG UV_VERSION
 ARG CLAUDE_CODE_VERSION
 ARG PYRIGHT_VERSION
 ARG SNIP_VERSION
+ARG RUSTFS_CLI_VERSION
 ARG SSL_CERT_FILE
 ARG SSL_CERT_DIR
 
@@ -51,7 +55,7 @@ ENV PYTHONUNBUFFERED=1 \
     CURL_CA_BUNDLE=${SSL_CERT_FILE}
 
 COPY scripts/develop.sh /tmp/develop.sh
-RUN bash /tmp/develop.sh "$UV_VERSION" "$CLAUDE_CODE_VERSION" "$PYRIGHT_VERSION" "$SNIP_VERSION"
+RUN bash /tmp/develop.sh "$UV_VERSION" "$CLAUDE_CODE_VERSION" "$PYRIGHT_VERSION" "$SNIP_VERSION" "$RUSTFS_CLI_VERSION"
 
 USER vscode
 WORKDIR /workspace

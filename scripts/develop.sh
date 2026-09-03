@@ -7,9 +7,18 @@ uv_version=$1
 claude_code_version=$2
 pyright_version=$3
 snip_version=$4
+rustfs_cli_version=$5
 
 apt-get update
-apt-get install -y --no-install-recommends libpq-dev
+# postgresql-client/redis-tools give psql/redis-cli for connecting to the
+# stack's postgres/redis services (see .devcontainer/stack/postgres and
+# .devcontainer/stack/redis's READMEs). Debian's own repo only carries one
+# version of each (currently newer than the pinned server images) -- same
+# as libpq-dev below, there's no exact-version pin available via apt; a
+# newer client talking to an older server is standard practice for both
+# tools. RustFS's own CLI (rc) isn't an apt package, so it's installed
+# separately below.
+apt-get install -y --no-install-recommends libpq-dev postgresql-client redis-tools
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
@@ -44,6 +53,21 @@ tar -xzf "${snip_tmpdir}/${snip_asset}" -C "$snip_tmpdir" snip
 sudo -u vscode install -Dm755 "${snip_tmpdir}/snip" /home/vscode/.local/bin/snip
 rm -rf "$snip_tmpdir"
 ln -s /home/vscode/.local/bin/snip /usr/local/bin/snip
+
+# For connecting to the s3 stack service (RustFS) -- see
+# .devcontainer/stack/s3/README.md. Published as .deb/.rpm release assets
+# plus a SHA256SUMS file, not on apt/PyPI/npm, so fetched and
+# checksum-verified the same way as snip above.
+rustfs_cli_arch="$(dpkg --print-architecture)"
+rustfs_cli_asset="rustfs-cli_${rustfs_cli_version}_${rustfs_cli_arch}.deb"
+rustfs_cli_tmpdir="$(mktemp -d)"
+curl -LsSf -o "${rustfs_cli_tmpdir}/${rustfs_cli_asset}" \
+    "https://github.com/rustfs/cli/releases/download/v${rustfs_cli_version}/${rustfs_cli_asset}"
+curl -LsSf -o "${rustfs_cli_tmpdir}/SHA256SUMS" \
+    "https://github.com/rustfs/cli/releases/download/v${rustfs_cli_version}/SHA256SUMS"
+(cd "$rustfs_cli_tmpdir" && grep " ${rustfs_cli_asset}\$" SHA256SUMS | sha256sum -c -)
+apt-get install -y --no-install-recommends "${rustfs_cli_tmpdir}/${rustfs_cli_asset}"
+rm -rf "$rustfs_cli_tmpdir"
 
 # `kcadm` reaches the sibling `keycloak` container's Admin REST API from
 # the devcontainer -- see .devcontainer/stack/keycloak/README.md. A thin

@@ -11,7 +11,11 @@ Redis 7, for caching, background-job queues, or pub/sub.
 
 ## Do
 
-- Use these default credentials for local development only.
+- Reach this service from a tool running inside the devcontainer network
+  rather than publishing the port to the host: the `redis-cli` CLI
+  (installed by `scripts/develop.sh` — run `redis-cli -h redis`), or
+  Claude's `redis` MCP server (`../../../.mcp.json` — see
+  `../../../.claude/README.md`).
 
 ## Don't
 

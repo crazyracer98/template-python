@@ -4,11 +4,24 @@ Project-scope Claude Code configuration, shared with every collaborator
 who opens this repo (see the root `.gitignore`, which does *not* exclude
 this directory).
 
-- `settings.json` — enables the official `pyright-lsp` plugin so Claude
-  gets type diagnostics and code navigation from pyright directly,
-  instead of grep-based exploration; this is what `scripts/develop.sh`
-  installs `pyright`/`pyright-langserver` for. Also wires up the
-  `PostToolUse` hook below.
+- `settings.json` — enables official plugins from the built-in
+  `claude-plugins-official` marketplace via `enabledPlugins`:
+  - `pyright-lsp` — gives Claude type diagnostics and code navigation
+    from pyright directly, instead of grep-based exploration; this is
+    what `scripts/develop.sh` installs `pyright`/`pyright-langserver`
+    for.
+  - `context7` — pulls up-to-date, version-specific library
+    documentation and examples into context from Context7's hosted
+    remote MCP server (`https://mcp.context7.com/mcp`); no local
+    install. Works anonymously; set a `CONTEXT7_API_KEY` env var for
+    higher rate limits.
+  - `security-guidance` — security review for Claude-generated code:
+    pattern-based warnings on `Edit`/`Write`, an LLM diff review when
+    Claude finishes a turn, and an agentic reviewer on `git commit`
+    that traces cross-file data flow. Needs only Python 3.8+ on
+    `PATH`, which this devcontainer already provides.
+
+  `settings.json` also wires up the `PostToolUse` hook below.
 - `hooks/self-check.sh` — after Claude edits a file, runs the fast,
   pre-commit-stage hooks from `../.pre-commit-config.yaml` (ruff, trailing
   whitespace, ...) against just that file via `prek`, so issues are
@@ -30,6 +43,57 @@ this directory).
   rather than blocking it); rtk's larger community and multi-maintainer
   team are the tradeoff, so revisit this choice if `snip` goes
   unmaintained.
+- `../.mcp.json` — project-scope MCP servers not available as a
+  `claude-plugins-official` plugin, so they can't go through
+  `enabledPlugins` above. Each is pinned to an exact version (a commit
+  SHA where the project publishes no tagged release) and, where it
+  needs the stack's own credentials/endpoints, reads them via `${VAR}`
+  from the same env vars `../.devcontainer/compose.yml` already gives
+  the `api` service — never re-pinned a second time:
+  - `clear-thought` (`@waldzellai/clear-thought-onepointfive`) — a
+    local stdio MCP server exposing structured reasoning/mental-model
+    tools, launched via `npx`. `npx` needs Node.js, which isn't
+    otherwise a dependency of this Python template — that's the only
+    reason `../devcontainer.json` adds the pinned `node` feature;
+    Claude Code itself doesn't need it.
+  - `postgres` (`postgres-mcp`, aka Postgres MCP Pro) — query/schema
+    access to the `postgres` stack service, run `unrestricted` (full
+    read/write against the local dev DB) via `uvx`. Anthropic's own
+    reference Postgres MCP server is archived with an unpatched SQL
+    injection vulnerability, hence this community one instead. Its
+    0.3.0 release itself only pins `mcp[cli]>=1.5.0` with no upper
+    bound, so a bare `uvx` resolves the newest (currently incompatible,
+    v2) `mcp` and fails at import; the extra `--with mcp==1.9.4` pins
+    around that until upstream adds its own bound.
+  - `redis` (`redis-mcp-server`) — Redis's own official MCP server for
+    the `redis` stack service, run via `uvx`.
+  - `s3-mcp` — a generic S3-protocol MCP server (works against any
+    S3-compatible endpoint, including RustFS) for the `s3` stack
+    service, run via `uvx` from a pinned commit rather than a release
+    (none exist). Low trust signal (single maintainer, no stars, no
+    tagged release) accepted deliberately; its write-capable tools
+    (`put_object`, `delete_object`, `copy_object`, `create_bucket`,
+    `delete_bucket`, `presign_put`) are blocked via `settings.json`'s
+    `permissions.deny` instead of trusting the server's own config, since
+    it has no read-only toggle. RustFS's own MCP server was removed from
+    its main branch (per its own docs) and MinIO's was archived in favor
+    of a commercial product, so neither was an option.
+  - `playwright` (`@playwright/mcp`) — browser automation against the
+    `selenium` stack service's Chromium, via `mcp/playwright_selenium_bridge.py`
+    (below) rather than a direct `.mcp.json` entry.
+- `mcp/playwright_selenium_bridge.py` — `@playwright/mcp` only takes a
+  static `--cdp-endpoint`, but `selenium` (Selenium Grid) only hands out
+  a CDP URL per WebDriver session — the same one
+  `tests/e2e/conftest.py`'s `browser` fixture reads from the `se:cdp`
+  capability. This script opens that session itself, launches
+  `@playwright/mcp` with the resulting CDP URL, and keeps the session
+  open for the MCP server's lifetime (closing it would tear down the
+  browser CDP is talking to). Run via `uv run --extra dev` from
+  `../.mcp.json`'s `playwright` entry, so it shares the `selenium`
+  package already in the `dev` dependency group rather than adding a
+  second one.
+- `settings.json`'s `permissions.deny` — blocks `s3-mcp`'s write-capable
+  tools (see above); nothing else in this file uses `permissions` yet.
 
 ## Do
 
@@ -49,3 +113,13 @@ this directory).
 - **snip**: delete the `PreToolUse` hook entry in `settings.json` and the
   `snip` install block (and `SNIP_VERSION` ARG in the Dockerfile) from
   `scripts/develop.sh`.
+- **context7** / **security-guidance**: delete the plugin's
+  `enabledPlugins` entry in `settings.json`.
+- **clear-thought**: delete its entry from `../.mcp.json`; if nothing
+  else needs Node.js, also remove the `node` feature from
+  `../devcontainer.json` and its entry from `../devcontainer-lock.json`.
+- **postgres** / **redis**: delete the entry from `../.mcp.json`.
+- **s3-mcp**: delete its entry from `../.mcp.json` and its six
+  `permissions.deny` entries from `settings.json`.
+- **playwright**: delete its entry from `../.mcp.json` and
+  `mcp/playwright_selenium_bridge.py`.

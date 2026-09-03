@@ -1,32 +1,47 @@
-"""FastAPI app entrypoint: wires up settings, OIDC auth, and routes."""
+"""FastAPI app entrypoint: wires up settings, migrations, routers, and lifespan."""
 
-from typing import Annotated, Any
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from alembic.config import Config
+from fastapi import FastAPI
 
+from alembic import command
 from app.config import get_settings
-from app.oidc import get_current_claims
+from app.controllers import health, heroes, protected
 
 settings = get_settings()
 
+
+def _run_migrations() -> None:
+    """Apply any pending Alembic migrations against the configured database.
+
+    Blocking (Alembic's async recipe runs its own asyncio.run internally), so the
+    caller must run this off the event loop -- see lifespan below. `alembic.ini` is
+    resolved relative to the current working directory: the repo root in the
+    devcontainer and under pytest, /app in the runner image (see the root
+    Dockerfile's runner stage, which copies alembic.ini/alembic/ there).
+    """
+    command.upgrade(Config("alembic.ini"), "head")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Apply pending migrations before serving, then run normally until shutdown."""
+    await asyncio.to_thread(_run_migrations)
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
+    lifespan=lifespan,
     swagger_ui_init_oauth={
         "usePkceWithAuthorizationCodeGrant": True,
         "clientId": settings.oidc_client_id,
     },
 )
 
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    """Liveness check; reachable without a token."""
-    return {"status": "ok"}
-
-
-@app.get("/protected")
-async def protected(
-    claims: Annotated[dict[str, Any], Depends(get_current_claims)],
-) -> dict[str, str]:
-    """Example authenticated route: return only the subject claim, not the full token."""
-    return {"sub": claims["sub"]}
+app.include_router(health.router)
+app.include_router(heroes.router)
+app.include_router(protected.router)

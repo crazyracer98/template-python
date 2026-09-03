@@ -119,6 +119,13 @@ COPY scripts/runner.sh /usr/local/bin/runner.sh
 COPY --from=builder --chown=${APP_UID}:0 --chmod=750 /opt/venv /opt/venv
 WORKDIR /app
 
+# alembic.ini/alembic/ aren't part of the installed app package (see src/README.md's
+# "Don't put fixtures/sample data/documentation here"), so they need copying in
+# explicitly for app.main's lifespan hook to find at its CWD-relative "alembic.ini"
+# and auto-apply pending migrations on startup -- see CLAUDE.md's "Alembic" section.
+COPY alembic.ini ./
+COPY alembic ./alembic/
+
 COPY scripts/runner-setup.sh /tmp/runner-setup.sh
 RUN bash /tmp/runner-setup.sh "$APP_UID"
 

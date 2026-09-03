@@ -60,10 +60,10 @@ jobs:
         with:
           context: .
           target: runner
-          tags: template-python:${{ steps.version.outputs.version }}
+          tags: template-fastapi:${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=oci,dest=template-python-${{ steps.version.outputs.version }}.tar
+          outputs: type=oci,dest=template-fastapi-${{ steps.version.outputs.version }}.tar
 
       # Optional: only runs when an OCI registry is actually configured
       # (a repository variable), so this workflow works out of the box
@@ -110,7 +110,7 @@ jobs:
             PRERELEASE_FLAG=
           fi
           gh release create "${{ steps.version.outputs.tag }}" \
-            "template-python-${{ steps.version.outputs.version }}.tar" \
+            "template-fastapi-${{ steps.version.outputs.version }}.tar" \
             --title "${{ steps.version.outputs.tag }}" \
             --target "${{ github.sha }}" \
             --generate-notes \

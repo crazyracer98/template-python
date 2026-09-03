@@ -84,7 +84,7 @@ set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
     echo "Usage: kcadm METHOD PATH [JSON_BODY]" >&2
-    echo "Example: kcadm GET /admin/realms/template-python/users" >&2
+    echo "Example: kcadm GET /admin/realms/template-fastapi/users" >&2
     exit 1
 fi
 

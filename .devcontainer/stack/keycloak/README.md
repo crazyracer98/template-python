@@ -10,13 +10,13 @@ exist immediately — no manual admin-console setup required.
 - Image: `quay.io/keycloak/keycloak:26.7.3`
 - Host (from other containers): `keycloak`
 - Port (container-internal): `8080`
-- Realm: `template-python`
+- Realm: `template-fastapi`
 - Client ID: `api` (public client, no client secret)
 - Admin console user / password: `admin` / `admin`
 - Test users / password (same as username): `viewer`, `editor`, `security`,
   `maintainer`, `detective` — all with the same `offline_access` /
   `uma_authorization` realm roles; see `realm-export.json` for names/emails
-- Issuer URL (from other containers): `http://keycloak:8080/realms/template-python`
+- Issuer URL (from other containers): `http://keycloak:8080/realms/template-fastapi`
 - Admin credentials and the `OIDC_*` URLs: defined in `keycloak.env`, next to this file
 
 Unlike the other stack services, Keycloak's port is listed in
@@ -37,8 +37,8 @@ requires. It logs in as `KEYCLOAK_ADMIN`/`KEYCLOAK_ADMIN_PASSWORD` (from
 HTTP method, an Admin REST API path, and an optional JSON body:
 
 ```bash
-kcadm GET /admin/realms/template-python/users
-kcadm PUT /admin/realms/template-python/users/<id> '{"firstName": "Dev"}'
+kcadm GET /admin/realms/template-fastapi/users
+kcadm PUT /admin/realms/template-fastapi/users/<id> '{"firstName": "Dev"}'
 ```
 
 ## Do

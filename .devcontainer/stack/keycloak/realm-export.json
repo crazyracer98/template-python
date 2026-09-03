@@ -1,12 +1,12 @@
 {
-  "realm": "template-python",
+  "realm": "template-fastapi",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
   "clients": [
     {
       "clientId": "api",
-      "name": "template-python API",
+      "name": "template-fastapi API",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",

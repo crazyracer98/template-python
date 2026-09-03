@@ -1,5 +1,5 @@
 {
-  "name": "template-python",
+  "name": "template-fastapi",
   "dockerComposeFile": [
     "compose.yml"
   ],
@@ -32,7 +32,7 @@
   "remoteEnv": {
     "SSH_AUTH_SOCK": "/ssh-agent"
   },
-  "postCreateCommand": "git config --global --add safe.directory /workspace && uv sync --extra dev && uv run prek install",
+  "postCreateCommand": "git config --global --add safe.directory /workspace && uv sync --extra dev && uv run prek install && uv run alembic upgrade head",
   "customizations": {
     "vscode": {
       "extensions": [

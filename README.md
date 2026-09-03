@@ -1,4 +1,4 @@
-# template-python
+# template-fastapi
 
 A template repository for FastAPI projects, built around a devcontainer
 setup composed from independent, swappable pieces.
@@ -12,6 +12,8 @@ setup composed from independent, swappable pieces.
 - `.mcp.json` — project-scope MCP servers not covered by a
   `.claude/settings.json` plugin; see `.claude/README.md`.
 - `src/` — the application source; see its `README.md`.
+- `alembic/` / `alembic.ini` — database migrations; see
+  `alembic/README.md`.
 - `tests/` — automated tests, split into `unit/`, `integration/`, and
   `e2e/` (Playwright) suites; see its `README.md`.
 - `scripts/` — the Dockerfile's per-stage setup scripts; see its
@@ -33,10 +35,15 @@ setup composed from independent, swappable pieces.
    Selenium container Playwright drives remotely for e2e tests; installs
    dependencies; and installs the git hooks, all via `postCreateCommand`.
 2. Run the app: `uvicorn app.main:app --reload --host 0.0.0.0`, or use
-   the "FastAPI: api" launch config to run it under the debugger.
-3. Health check: `curl localhost:8000/health`. `/protected` needs a
-   bearer token from Keycloak — see
-   `.devcontainer/stack/keycloak/README.md`.
+   the "FastAPI: api" launch config to run it under the debugger. Startup
+   applies any pending Alembic migrations automatically — see
+   `src/app/README.md`'s "Alembic migrations".
+3. Health check: `curl localhost:8000/health/live` (liveness) or
+   `curl localhost:8000/health/ready` (readiness — checks Postgres,
+   Redis, S3, and the OIDC provider). `curl localhost:8000/heroes` is a
+   worked example CRUD resource (see `src/app/README.md`'s "Example CRUD
+   resource: Hero"). `/protected` needs a bearer token from Keycloak —
+   see `.devcontainer/stack/keycloak/README.md`.
 
 Without a devcontainer: install [`uv`](https://docs.astral.sh/uv/), export
 your own `DATABASE_URL` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY` /

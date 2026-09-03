@@ -26,7 +26,7 @@ step, and the image-name step are all skipped otherwise, so the
 workflow works with no registry configured at all. When it is set:
 
 - `OCI_IMAGE_NAME` (variable, optional) — the image path within the
-  registry, e.g. `myorg/template-python`. Defaults to the repository's
+  registry, e.g. `myorg/template-fastapi`. Defaults to the repository's
   own `owner/repo` (lowercased) if unset.
 - `OCI_REGISTRY_USERNAME` / `OCI_REGISTRY_PASSWORD` (secrets,
   required whenever `OCI_REGISTRY` is set) — credentials for

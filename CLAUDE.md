@@ -79,7 +79,7 @@ duplicates or re-pins it elsewhere:
   runners, Playwright — lives in the single `dev` optional-dependencies
   group rather than split across several groups, since it's all
   development-related; if a future group needs another group's packages,
-  reference it as a self-referential extra (e.g. `"template-python[dev]"`,
+  reference it as a self-referential extra (e.g. `"template-fastapi[dev]"`,
   per PEP 621) instead of re-pinning the same package a second time.
 - Everything else pinned (base images, Actions, hook revisions): pinned
   once, at its single point of use.
@@ -227,10 +227,60 @@ sibling containers (e.g. `selenium`) — only a `docker compose` invoked
 on the host can. See `.devcontainer/stack/selenium/README.md`
 for the concrete case this affects.
 
+## src/app/ layering
+
+`src/app/` follows an MVC-ish split, each in its own subpackage:
+`models/` (SQLAlchemy ORM), `views/` (Pydantic schemas), `repositories/`
+(storage-agnostic CRUD access, with a generic SQLAlchemy implementation),
+`crud/` (a generic CRUD interface built from a view + a repository, so a
+new resource never needs its own CRUD class), `health/` (a registry of
+checks against external services), and `controllers/` (FastAPI routers).
+`config.py`/`main.py`/`oidc.py` stay flat, outside any subpackage.
+
+Import order between these is strict and one-directional — lower layers
+never import from higher ones (`config` → `oidc` → `models` → `views` →
+`repositories` → `crud` → `health` → `controllers` → `main`) — enforced
+by `import-linter`'s `layers` contract in `pyproject.toml`'s
+`[tool.importlinter]`, run via `uv run lint-imports` (wired into
+`.pre-commit-config.yaml`'s manual/pre-push stage, same as mypy). A new
+subpackage gets added to that `layers` list at the point matching its
+real dependencies, not appended blindly to one end.
+
+## Alembic migrations
+
+Migrations live in the root `alembic/` (not `src/app/` — see
+`src/README.md`'s "Don't put fixtures/sample data/documentation here";
+`alembic/` is a dev/ops tool alongside `scripts/`, `tests/`, `docs/`, not
+installable app code), authored with `uv run alembic revision
+--autogenerate -m "..."` against `app.models`' metadata (`alembic/env.py`
+imports every model module so autogenerate can see it). `alembic.ini`
+leaves `sqlalchemy.url` unset — `env.py` sources the DSN from
+`app.config.get_settings()` instead, the same one the app itself
+connects with, so a URL is never duplicated across the two.
+
+Pending migrations apply automatically: `app.main`'s FastAPI `lifespan`
+runs `alembic upgrade head` (off the event loop, via `asyncio.to_thread`
+— Alembic's async recipe in `env.py` runs its own `asyncio.run`
+internally, which can't nest inside one already running) before the app
+starts serving. That only fires for a real ASGI startup (`uvicorn`, the
+`runner` image, `tests/e2e`) — a bare `TestClient(app)` in
+`tests/unit`/`tests/integration` never triggers lifespan, so those
+suites need the schema already migrated; the devcontainer's own
+`postCreateCommand` runs `uv run alembic upgrade head` once up front for
+exactly that reason. `alembic.ini`/`alembic/` are resolved relative to
+the current working directory (plain `Config("alembic.ini")`), which is
+the repo root under the devcontainer/pytest and `/app` in the `runner`
+image (see the Dockerfile's `runner` stage, which `COPY`s both there) —
+never hardcode a different path.
+
+`runner.sh` stays the plain entrypoint `scripts/README.md` requires —
+migrations run from Python, in `app.main`'s lifespan, never from the
+shell script.
+
 ## OIDC / Keycloak
 
 `.devcontainer/stack/keycloak/` runs Keycloak with dev-mode realm
-auto-import (`realm-export.json`: realm `template-python`, public client
+auto-import (`realm-export.json`: realm `template-fastapi`, public client
 `api`, test users `viewer`/`editor`/`security`/`maintainer`/`detective`,
 each with a password matching its username). `src/app/oidc.py` validates
 bearer tokens against it via generic OIDC discovery + JWKS
@@ -255,6 +305,19 @@ browser in the `selenium` stack container remotely, over CDP — see
 import from one another. A plain `pytest` run collects `unit/` and
 `integration/`; `e2e/` is ignored by default (see `pyproject.toml`) and
 run explicitly with `uv run pytest tests/e2e`.
+
+An `async def test_...` runs with no `@pytest.mark.asyncio` marker
+needed (`asyncio_mode = "auto"` in `[tool.pytest.ini_options]`), and
+every async test in one run shares a single event loop
+(`asyncio_default_fixture_loop_scope = "session"`) — required because
+`app.models.base`'s async engine/session factory are process-wide
+singletons (matching `get_settings()`'s pattern): asyncpg ties a
+connection to the event loop that opened it, and a run mixes
+pytest-asyncio's loop with `TestClient`'s own background-thread loop, so
+pooling a connection across that boundary raises
+`asyncpg.exceptions.InterfaceError`. The engine also uses `NullPool` (a
+fresh connection per checkout) for the same reason, at the cost of
+connection reuse.
 
 ## VS Code
 

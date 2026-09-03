@@ -21,9 +21,11 @@ process itself; see `e2e/README.md`.
 
 ## Do
 
-- Name a test file after the module or integration point it covers
-  (`src/app/config.py` → `tests/unit/test_config.py`) so coverage is easy
-  to eyeball.
+- Name a test file after the module or integration point it covers,
+  mirroring `src/app/`'s directory structure (`src/app/config.py` →
+  `tests/unit/test_config.py`; `src/app/controllers/heroes.py` →
+  `tests/unit/controllers/test_heroes.py`, with `__init__.py` in each
+  new test subdirectory) so coverage is easy to eyeball.
 - Let `assert` and bare literal comparisons stand — `S101` and `PLR2004`
   are disabled for all three suites precisely so tests can look like
   tests.

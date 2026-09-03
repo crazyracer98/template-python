@@ -1,7 +1,7 @@
 # Project metadata, dependencies, and every linter/type-checker/test-runner
 # config: see CLAUDE.md's "Configuration" section for why it all lives here.
 [project]
-name = "template-python"
+name = "template-fastapi"
 version = "0.1.0"
 description = "Template repository for FastAPI projects"
 requires-python = ">=3.14"
@@ -11,6 +11,11 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "pyjwt[crypto]==2.13.0",
     "httpx==0.28.1",
+    "sqlalchemy[asyncio]==2.0.52",
+    "asyncpg==0.31.0",
+    "alembic==1.19.1",
+    "redis==8.1.0",
+    "boto3==1.43.88",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +30,8 @@ dev = [
     "pytest-playwright==0.9.0",
     "selenium==4.48.0",
     "pytest-cov==7.0.0",
+    "import-linter==2.14",
+    "boto3-stubs[s3]==1.43.88",
 ]
 
 [build-system]
@@ -63,6 +70,29 @@ known-first-party = ["app"]
 # is not a "magic number". Covers tests/ and tests/e2e/ alike.
 "tests/**" = ["S101", "PLR2004"]
 
+[tool.importlinter]
+# Enforces src/app/CLAUDE.md's strict import order between app/'s directories: each
+# layer may import any layer listed after it, never one listed before it (e.g.
+# app.models must never import from app.controllers). Run via `uv run lint-imports`
+# (wired into .pre-commit-config.yaml's manual/pre-push stage).
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "app layers"
+type = "layers"
+containers = ["app"]
+layers = [
+    "main",
+    "controllers",
+    "health",
+    "crud",
+    "repositories",
+    "views",
+    "models",
+    "oidc",
+    "config",
+]
+
 [tool.mypy]
 python_version = "3.14"
 mypy_path = "src"
@@ -75,6 +105,16 @@ cache_dir = "/home/vscode/.cache/mypy"
 # cache_dir: see the cache-dir comment under [tool.ruff] above -- same reasoning.
 cache_dir = "/home/vscode/.cache/pytest"
 addopts = "--strict-markers --strict-config -ra --ignore=tests/e2e --cov=app --cov-report=term-missing"
+# Lets an `async def test_...` run without a per-test @pytest.mark.asyncio marker --
+# needed once tests exercise app.crud/app.repositories/app.health directly (not just
+# through TestClient, which stays sync regardless of this setting).
+asyncio_mode = "auto"
+# app.models.base's engine/session factory are process-wide singletons (like
+# get_settings()), matching how the app itself runs in a single event loop. A
+# per-test event loop (pytest-asyncio's default) would hand asyncpg connections
+# from one loop to another between tests, which asyncpg rejects outright --
+# "another operation is in progress". One session-scoped loop avoids that.
+asyncio_default_fixture_loop_scope = "session"
 filterwarnings = [
     "error",
     # starlette 1.6.0's testclient module still references the anyio.abc.BlockingPortal

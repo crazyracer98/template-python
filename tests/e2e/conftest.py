@@ -51,7 +51,7 @@ def _running_app(base_url: str) -> Generator[None]:
         yield
         return
 
-    health_url = f"{base_url}/health"
+    health_url = f"{base_url}/health/live"
     try:
         httpx.get(health_url, timeout=1).raise_for_status()
         yield

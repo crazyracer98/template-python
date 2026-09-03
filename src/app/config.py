@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # "Configuration" section.
     model_config = SettingsConfigDict(extra="ignore")
 
-    app_name: str = "template-python"
+    app_name: str = "template-fastapi"
 
     postgres_user: str = "app"
     postgres_password: str = "app"  # noqa: S105 -- local Postgres default, not a real secret
@@ -49,13 +49,13 @@ class Settings(BaseSettings):
     # instead discovered lazily from issuer_url (see oidc.py), so unit tests
     # that never authenticate never need network access. audience is left
     # unset: the bundled dev realm's "api" client does not set one.
-    oidc_issuer_url: str = "http://localhost:8080/realms/template-python"
+    oidc_issuer_url: str = "http://localhost:8080/realms/template-fastapi"
     oidc_authorization_url: str = (
-        "http://localhost:8080/realms/template-python/protocol/openid-connect/auth"
+        "http://localhost:8080/realms/template-fastapi/protocol/openid-connect/auth"
     )
     # "_token_url" trips ruff's S105 (looks like a hardcoded password); it is a URL.
     oidc_token_url: str = (
-        "http://localhost:8080/realms/template-python/protocol/openid-connect/token"  # noqa: S105
+        "http://localhost:8080/realms/template-fastapi/protocol/openid-connect/token"  # noqa: S105
     )
     oidc_client_id: str = "api"
     oidc_algorithm: str = "RS256"

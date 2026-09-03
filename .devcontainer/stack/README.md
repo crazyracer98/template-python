@@ -24,6 +24,12 @@ fragment's own header comment.
 - Give a new service its own subdirectory following this same
   `compose.yml` + `README.md` pattern, plus a `<service>.env` if it has
   credentials or other config values to hold.
+- Give the service a `healthcheck:`, and add a matching `depends_on:
+  <service>: condition: service_healthy` entry to `api` in
+  `../compose.yml` — see CLAUDE.md's "Devcontainer stack pattern"
+  section for why, and verify the healthcheck command against the real
+  pinned image before trusting it (don't assume `curl`/`wget` are
+  present).
 - Let it join the default network compose generates for this project —
   don't declare a `networks:` block; every service reaches every other
   one by its service name already.

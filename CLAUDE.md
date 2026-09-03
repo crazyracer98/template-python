@@ -157,6 +157,20 @@ No fragment (including the app service's own `compose.yml`) declares a
   Compose at all. This keeps "what's reachable from the host" defined in
   exactly one place instead of scattered `ports:` blocks.
 
+Every stack fragment's service also defines a `healthcheck:`, and
+`.devcontainer/compose.yml`'s `api` service lists a matching `depends_on:
+<service>: condition: service_healthy` entry for it. Compose won't start
+`api` until every dependency reports healthy, so `docker compose up` (and
+therefore `devcontainers/ci`'s `runCmd`, and a fresh `postCreateCommand`)
+never runs a check or a test against a stack service that's still
+starting — e.g. Keycloak, a JVM app doing `start-dev --import-realm`,
+takes far longer to accept requests than Postgres/Redis/RustFS do. Pick
+each healthcheck from what the image actually ships — verify with
+`docker run`/`docker compose up` against the real pinned image rather
+than assuming a tool (`curl`, `wget`) is present; `stack/keycloak/
+compose.yml`'s healthcheck uses bash's `/dev/tcp` instead of `curl`
+because the official Keycloak image ships neither `curl` nor `wget`.
+
 ## Dockerfile
 
 The top-level `Dockerfile` has three stages — `develop`, `builder`,

@@ -34,6 +34,21 @@ services:
       - ./stack/postgres/postgres.env
       - ./stack/s3/s3.env
       - ./stack/keycloak/keycloak.env
+    # Waits for every stack service's own healthcheck (see each fragment's
+    # compose.yml) so `docker compose up` -- and therefore devcontainers/ci's
+    # runCmd, and postCreateCommand -- never starts api, prek, or pytest
+    # before the service they'd talk to is actually ready.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      selenium:
+        condition: service_healthy
     environment:
       # Fixed in-network hostnames/ports, not credentials, so they're
       # literal here rather than pulled from a stack env file.

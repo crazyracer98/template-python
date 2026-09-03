@@ -1,0 +1,117 @@
+# Manually-triggered SemVer release: computes the tag, builds the runner
+# image, and publishes a GitHub release with that image attached as a
+# downloadable OCI tarball -- plus, if an OCI registry is configured, a
+# push to that registry.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Release channel
+        type: choice
+        required: true
+        options:
+          - alpha
+          - beta
+          - rc
+          - full
+      bump:
+        description: >-
+          SemVer 2 part to increase. Use "none" to keep the current base
+          version — e.g. to add another alpha/beta/rc to an existing
+          series, or to promote one straight to a full release.
+        type: choice
+        required: true
+        options:
+          - major
+          - minor
+          - patch
+          - none
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        run: |
+          python3 .github/scripts/compute_next_version.py \
+            --bump "${{ inputs.bump }}" \
+            --release-type "${{ inputs.release_type }}" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.1.0
+
+      # Attached to the GitHub release below regardless of whether an OCI
+      # registry is configured below -- a portable, offline-loadable
+      # artifact (`docker load --input`) of exactly what was released.
+      - name: Build runner image (OCI tarball)
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: .
+          target: runner
+          tags: template-python:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=oci,dest=template-python-${{ steps.version.outputs.version }}.tar
+
+      # Optional: only runs when an OCI registry is actually configured
+      # (a repository variable), so this workflow works out of the box
+      # with no registry at all.
+      - name: Determine OCI image name
+        if: vars.OCI_REGISTRY != ''
+        id: oci_image
+        run: |
+          image_name="${{ vars.OCI_IMAGE_NAME }}"
+          if [ -z "$image_name" ]; then
+            image_name="${{ github.repository }}"
+          fi
+          echo "name=${image_name,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to OCI registry
+        if: vars.OCI_REGISTRY != ''
+        uses: docker/login-action@v4.5.0
+        with:
+          registry: ${{ vars.OCI_REGISTRY }}
+          username: ${{ secrets.OCI_REGISTRY_USERNAME }}
+          password: ${{ secrets.OCI_REGISTRY_PASSWORD }}
+
+      - name: Push runner image to OCI registry
+        if: vars.OCI_REGISTRY != ''
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: .
+          target: runner
+          push: true
+          tags: ${{ vars.OCI_REGISTRY }}/${{ steps.oci_image.outputs.name }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Lets `gh` create the tag itself (from the checked-out commit) and
+      # the release in one step, using GitHub's own "generate release
+      # notes" changelog — the same one the web UI's button produces.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG=--prerelease
+          else
+            PRERELEASE_FLAG=
+          fi
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "template-python-${{ steps.version.outputs.version }}.tar" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --target "${{ github.sha }}" \
+            --generate-notes \
+            $PRERELEASE_FLAG

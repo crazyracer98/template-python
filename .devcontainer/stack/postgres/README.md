@@ -1,0 +1,29 @@
+# postgres
+
+PostgreSQL 16, used as the primary application database.
+
+- Compose file: `compose.yml`
+- Image: `postgres:16.15-alpine`
+- Host (from other containers only — see root README's "Don't"): `postgres`
+- Port (container-internal): `5432`
+- User / password / database: `app` / `app` / `app`
+- Connection URL: `postgresql+asyncpg://app:app@postgres:5432/app`
+- Data volume: `postgres-data` (persists across restarts, removed with `docker compose down -v`)
+- Credentials: defined in `postgres.env`, next to this file
+
+## Do
+
+- Use these default credentials for local development only.
+- Reach this service from a tool running inside the devcontainer network
+  (e.g. the Postgres browsing extension configured in
+  `.vscode/settings.json`) rather than publishing the port to the host.
+
+## Don't
+
+- Publish this service's port to the host, or reuse these defaults
+  anywhere but local dev.
+
+## Removing this service
+
+Delete this directory and remove its compose file from the
+`dockerComposeFile` array in `.devcontainer/devcontainer.json`.

@@ -1,0 +1,17 @@
+# Infra-stack service: Keycloak (OIDC provider). No ports: mapping here —
+# host-browser access to its login/admin UI goes through devcontainer.json's
+# forwardPorts, not through compose port publishing (see infra-stack/README.md
+# and the root README's "Don't"). Relative paths below (the env_file and the
+# bind-mount) resolve relative to .devcontainer/ (the base compose file's
+# directory), not this file's own directory — see CLAUDE.md's "Devcontainer
+# stack pattern" section. KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD come from
+# keycloak.env, next to this file.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    restart: unless-stopped
+    command: start-dev --import-realm
+    env_file:
+      - ./keycloak.env
+    volumes:
+      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro

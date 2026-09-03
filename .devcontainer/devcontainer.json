@@ -1,0 +1,50 @@
+{
+  "name": "template-python",
+  "dockerComposeFile": [
+    "compose.yml"
+  ],
+  "service": "api",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:4.1.0": {
+      "moby": false,
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+  "forwardPorts": [8000, 8080],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI (api)",
+      "onAutoForward": "openPreview"
+    },
+    "8080": {
+      "label": "Keycloak",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "uv sync --extra dev && uv run prek install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-docker",
+        "tamasfe.even-better-toml",
+        "ms-ossdata.vscode-pgsql",
+        "lvdn.s3x-explorer",
+        "Anthropic.claude-code"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        "remote.autoForwardPorts": true,
+        "workbench.browser.enableRemoteProxy": true
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

@@ -1,0 +1,23 @@
+# Infra-stack service: RustFS (S3-compatible object storage), reachable
+# only from other containers on the compose-generated default network.
+# RUSTFS_ACCESS_KEY/RUSTFS_SECRET_KEY come from s3.env, next to this file
+# (see CLAUDE.md's "Configuration" section). The env_file path below is
+# relative to .devcontainer/ (the base compose file's directory), not this
+# file's own directory -- same rule as bind-mount paths, see CLAUDE.md's
+# "Devcontainer stack pattern" section.
+services:
+  s3:
+    image: rustfs/rustfs:1.0.0-rc.5-glibc
+    restart: unless-stopped
+    environment:
+      RUSTFS_VOLUMES: /data/rustfs0
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    env_file:
+      - ./s3.env
+    volumes:
+      - s3-data:/data
+
+volumes:
+  s3-data:

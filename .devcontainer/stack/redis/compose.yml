@@ -1,0 +1,12 @@
+# Infra-stack service: Redis, reachable only from other containers on the
+# compose-generated default network (see infra-stack/README.md).
+services:
+  redis:
+    image: redis:7.4.11-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

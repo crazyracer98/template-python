@@ -1,0 +1,55 @@
+include:
+  - ./stack/postgres/compose.yml
+  - ./stack/s3/compose.yml
+  - ./stack/keycloak/compose.yml
+  - ./stack/redis/compose.yml
+  - ./stack/playwright/compose.yml
+
+# App service: the FastAPI application itself, built from the top-level
+# Dockerfile's `develop` stage. The workspace is bind-mounted so source
+# edits are picked up without a rebuild. env_file below pulls in each
+# infra-stack service's own credentials (see CLAUDE.md's "Configuration"
+# section); src/app/config.py assembles DATABASE_URL and the S3 access/
+# secret key fields from the raw postgres/rustfs values at runtime, and
+# OIDC_* arrive from keycloak.env already fully composed.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: develop
+      # No PYTHON_VERSION/DEBIAN_VERSION here: the Dockerfile's own ARG
+      # defaults are the single source for those — see CLAUDE.md's
+      # "Dependency management" section.
+    volumes:
+      - ..:/workspace:cached
+      # No volume for the venv (see UV_PROJECT_ENVIRONMENT in the
+      # Dockerfile): a mounted venv gets swept by Windows DLP/malware-
+      # scanning tools just like a bind-mounted one, so it lives purely in
+      # the container's writable layer and is rebuilt by
+      # `postCreateCommand` when needed.
+      - claude-config:/home/vscode/.claude
+    command: sleep infinity
+    env_file:
+      - ./stack/postgres/postgres.env
+      - ./stack/s3/s3.env
+      - ./stack/keycloak/keycloak.env
+    environment:
+      # Fixed in-network hostnames/ports, not credentials, so they're
+      # literal here rather than pulled from an infra-stack env file.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      S3_ENDPOINT_URL: http://s3:9000
+      REDIS_URL: redis://redis:6379/0
+    # No ports: mapping and no networks: block — see the root README's
+    # "Don't". Host access to :8000 comes from devcontainer.json's
+    # forwardPorts, and api reaches every infra-stack service by name on
+    # the default network compose generates for this project.
+
+volumes:
+  # Persists Claude Code CLI session/credential state across container
+  # rebuilds. Unlike the venv above, this is a small amount of
+  # session-state data, not thousands of dependency files, so the
+  # DLP/malware-scanning concern that rules out mounting the venv doesn't
+  # apply the same way here.
+  claude-config:

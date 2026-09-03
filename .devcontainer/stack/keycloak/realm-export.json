@@ -1,0 +1,35 @@
+{
+  "realm": "template-python",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "api",
+      "name": "template-python API",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    }
+  ],
+  "users": [
+    {
+      "username": "devuser",
+      "enabled": true,
+      "email": "devuser@example.com",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "devuser",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
+    }
+  ]
+}

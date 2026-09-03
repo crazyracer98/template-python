@@ -1,0 +1,52 @@
+# Lint/type-check/test gate: runs every prek hook, fast and extensive,
+# inside the same devcontainer used for local development.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prek:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      # Unique per run so concurrent runs (two PRs, or a re-run) never
+      # collide on container/volume/network names, and so the teardown
+      # step below tears down exactly this run's stack and nothing else.
+      - name: Set compose project name
+        run: echo "COMPOSE_PROJECT_NAME=ci-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
+      # --hook-stage manual runs every hook (both the fast pre-commit-stage
+      # ones and the extensive pre-push-stage ones) in one pass, inside the
+      # devcontainer -- the same environment (uv, prek, playwright, ...) a
+      # contributor develops in, not a hand-rolled CI-only equivalent.
+      - name: Run all hooks in the devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          runCmd: uv run prek run --all-files --hook-stage manual
+
+      # devcontainers/ci starts the full compose stack (see
+      # .devcontainer/devcontainer.json's dockerComposeFile) but never
+      # tears it down -- that's fine for a throwaway CI VM, but this repo
+      # wants a clean, explicit teardown regardless. Keep this file list
+      # in sync with dockerComposeFile (see CLAUDE.md's "Devcontainer
+      # stack pattern").
+      - name: Tear down devcontainer stack
+        if: always()
+        run: |
+          docker compose \
+            -f .devcontainer/compose.yml \
+            -f .devcontainer/infra-stack/postgres/compose.yml \
+            -f .devcontainer/infra-stack/s3/compose.yml \
+            -f .devcontainer/infra-stack/redis/compose.yml \
+            -f .devcontainer/infra-stack/keycloak/compose.yml \
+            -f .devcontainer/infra-stack/playwright/compose.yml \
+            down --volumes --remove-orphans

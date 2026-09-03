@@ -1,10 +1,9 @@
-# Infra-stack service: Postgres, reachable only from other containers on
-# the compose-generated default network (see infra-stack/README.md).
+# Stack service: Postgres, reachable only from other containers on
+# the compose-generated default network (see ../README.md).
 # POSTGRES_* values come from postgres.env, next to this file (see
 # CLAUDE.md's "Configuration" section). The env_file path below is
-# relative to .devcontainer/ (the base compose file's directory), not this
-# file's own directory -- same rule as bind-mount paths, see CLAUDE.md's
-# "Devcontainer stack pattern" section.
+# relative to this file's own directory, not .devcontainer/ -- see
+# CLAUDE.md's "Devcontainer stack pattern" section.
 services:
   postgres:
     image: postgres:16.15-alpine

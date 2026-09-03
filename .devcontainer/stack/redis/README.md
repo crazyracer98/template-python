@@ -20,5 +20,5 @@ Redis 7, for caching, background-job queues, or pub/sub.
 
 ## Removing this service
 
-Delete this directory and remove its compose file from the
-`dockerComposeFile` array in `.devcontainer/devcontainer.json`.
+Delete this directory and remove its compose file entry from
+`.devcontainer/compose.yml`'s `include:` list.

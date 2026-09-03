@@ -1,4 +1,4 @@
-# infra-stack/
+# stack/
 
 One subdirectory per supporting service (database, object storage,
 cache, identity provider, e2e test runner, ...). Each contains:
@@ -10,14 +10,13 @@ cache, identity provider, e2e test runner, ...). Each contains:
   `api` needs the same values, listed again under its own `env_file:` in
   `../compose.yml` — see CLAUDE.md's "Configuration" section) — only
   present when the service actually has credentials to hold (redis and
-  playwright don't).
+  selenium don't).
 
-Every fragment here is listed in `dockerComposeFile` in
-`../devcontainer.json`, so all of them start together. Because
-`../compose.yml` (the app service) is always first in that array, any
-relative bind-mount or `env_file:` path in a fragment here — like
-keycloak's `realm-export.json` or `keycloak.env` — is resolved relative
-to `.devcontainer/`, not to the fragment's own directory; see each
+Every fragment here is listed in `../compose.yml`'s own `include:` list,
+so all of them start together. Each fragment's relative bind-mount or
+`env_file:` path — like keycloak's `realm-export.json` or
+`keycloak.env` — resolves relative to *that fragment's own directory*,
+the same as if it were the only Compose file in play; see each
 fragment's own header comment.
 
 ## Do

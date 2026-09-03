@@ -21,7 +21,7 @@ consistent setup without configuring anything by hand.
   that `docker compose exec`s into a sibling container) — a task run
   from this window executes inside the devcontainer, which can't reach
   those containers. See
-  `.devcontainer/infra-stack/playwright/README.md`.
+  `.devcontainer/stack/selenium/README.md`.
 - Put container-only settings (interpreter path, in-container formatter)
   here — those belong in `devcontainer.json`'s
   `customizations.vscode.settings` instead, so they don't leak into a

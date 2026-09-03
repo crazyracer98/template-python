@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import time
 from collections.abc import Generator
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
@@ -18,6 +19,21 @@ from selenium.webdriver import ChromeOptions, Remote
 
 _STARTUP_TIMEOUT_SECONDS = 10.0
 
+# The api subprocess below runs the same app code the coverage gate measures
+# for tests/unit and tests/integration; give it the same coverage config and
+# a sitecustomize.py (via PYTHONPATH) so it starts measuring itself on launch
+# and pytest-cov can combine its data with this process's at session end --
+# see sitecustomize.py and pyproject.toml's [tool.coverage.run].
+_COVERAGE_SUBPROCESS_ENV = {
+    "COVERAGE_PROCESS_START": str(Path(__file__).resolve().parents[2] / "pyproject.toml"),
+    "PYTHONPATH": os.pathsep.join(
+        [
+            str(Path(__file__).resolve().parent),
+            *([os.environ["PYTHONPATH"]] if "PYTHONPATH" in os.environ else []),
+        ]
+    ),
+}
+
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
@@ -26,7 +42,7 @@ def base_url() -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _running_app(base_url: str) -> Generator[None, None, None]:
+def _running_app(base_url: str) -> Generator[None]:
     """Start the api server for the duration of the e2e run, unless one is
     already up (e.g. under the "FastAPI: api" launch config) or E2E_BASE_URL
     points somewhere this suite doesn't own.
@@ -51,7 +67,8 @@ def _running_app(base_url: str) -> Generator[None, None, None]:
     # just loopback -- same as the root README's manual startup command.
     # Fixed args plus our own parsed base_url's port, not external input.
     process = subprocess.Popen(  # noqa: S603
-        [uvicorn, "app.main:app", "--host", "0.0.0.0", "--port", str(port)]  # noqa: S104
+        [uvicorn, "app.main:app", "--host", "0.0.0.0", "--port", str(port)],  # noqa: S104
+        env={**os.environ, **_COVERAGE_SUBPROCESS_ENV},
     )
     try:
         deadline = time.monotonic() + _STARTUP_TIMEOUT_SECONDS
@@ -74,7 +91,7 @@ def _running_app(base_url: str) -> Generator[None, None, None]:
 
 
 @pytest.fixture(scope="session")
-def browser(playwright: Playwright) -> Generator[Browser, None, None]:
+def browser(playwright: Playwright) -> Generator[Browser]:
     """Connect to the selenium container's Chromium over CDP.
 
     No browser binaries are installed in this container -- see

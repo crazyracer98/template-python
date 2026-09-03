@@ -93,6 +93,12 @@ image, Action, and hook revision to an exact patch version — never a
 floating range or `latest` — so Renovate/Dependabot can bump them one at
 a time and the diff shows exactly what changed.
 
+The one exception is the Dockerfile's `PYTHON_VERSION` `ARG`: it's pinned
+to minor only, because `mcr.microsoft.com/devcontainers/python` (the
+`develop` stage's base image) doesn't publish patch-granularity tags —
+there is no patch version to pin to. See the comment at that `ARG` in
+the `Dockerfile`.
+
 ## File headers
 
 Every file gets a brief header stating what the file *is for* — one
@@ -116,21 +122,25 @@ repository follows this rule; keep new ones held to the same bar.
 
 ## Devcontainer stack pattern
 
-`.devcontainer/compose.yml` defines the app service. Supporting services
-(databases, object storage, caches, an OIDC provider, an e2e test
-runner, ...) live under `.devcontainer/infra-stack/<name>/`, each with
-exactly two files: a `compose.yml` fragment and a `README.md` describing
-it. A new infra service follows this same pattern and gets added to
-`dockerComposeFile` in `devcontainer.json`.
+`.devcontainer/compose.yml` defines the app service and pulls every
+supporting service in via its own `include:` list — not the
+`dockerComposeFile` array in `devcontainer.json`, which only ever names
+this one file. Supporting services (databases, object storage, caches,
+an OIDC provider, an e2e test runner, ...) live under
+`.devcontainer/stack/<name>/`, each with exactly two files: a
+`compose.yml` fragment and a `README.md` describing it. A new service
+follows this same pattern and gets added to `.devcontainer/compose.yml`'s
+`include:` list.
 
-Because `.devcontainer/compose.yml` is always first in that array, it's
-the *base* Compose file for path-resolution purposes: any relative
-bind-mount path in **any** fragment — including one under
-`infra-stack/<name>/` — resolves relative to `.devcontainer/`, not to
-that fragment's own directory (this is documented Compose multi-file
-behavior, not a devcontainer-specific quirk). Write such a path as
-`./infra-stack/<name>/<file>`, and say so in a comment at that line —
-see `infra-stack/keycloak/compose.yml` for an example.
+Compose resolves each included fragment's own relative paths (bind
+mounts, `env_file:`) against *that fragment's own directory*, not
+`.devcontainer/` — so a fragment under `stack/<name>/` writes its paths
+as plain `./file`, the same as if it were the only Compose file in play;
+see `stack/keycloak/compose.yml`'s `env_file:`/bind-mount for an example.
+Only `.devcontainer/compose.yml` itself, reaching into a fragment's
+directory (its own `env_file:` list, `stack/postgres/postgres.env` and
+friends), needs the `./stack/<name>/<file>` form, since those paths are
+written in — and so resolve against — `.devcontainer/` itself.
 
 No fragment (including the app service's own `compose.yml`) declares a
 `ports:` mapping or a `networks:` block:
@@ -161,9 +171,9 @@ process environment only, which the compose files populate (see below).
 No real secrets exist in this template yet — when one is needed, it goes
 in `.secrets/` and is referenced from a compose file, never hardcoded.
 
-Every infra-stack service's own local-dev-only default credentials
+Every stack service's own local-dev-only default credentials
 (Postgres, RustFS, Keycloak's admin/test users, ...) live in a
-`<service>.env` file inside that service's own `infra-stack/<service>/`
+`<service>.env` file inside that service's own `stack/<service>/`
 directory — the single source of truth for that service's values,
 tracked in git since these are dev-only defaults, not real secrets (each
 service's `README.md` says so). That fragment's own `compose.yml` loads
@@ -185,17 +195,17 @@ credentials and stay as plain literals in the consuming compose file
 The devcontainer has its own isolated Docker-in-Docker daemon (the
 `docker-in-docker` feature in `devcontainer.json`). It is **not** the
 same daemon running this project's own compose stack (`api`, `postgres`,
-the rest of `infra-stack/`) — that stack is started by whatever invoked
+the rest of `stack/`) — that stack is started by whatever invoked
 "Reopen in Container" against the *host's* Docker. So `docker`/`docker
 compose` run from inside the devcontainer can build and run throwaway
 containers of their own, but can never see or `exec` into this project's
-sibling containers (e.g. `playwright`) — only a `docker compose` invoked
-on the host can. See `.devcontainer/infra-stack/playwright/README.md`
+sibling containers (e.g. `selenium`) — only a `docker compose` invoked
+on the host can. See `.devcontainer/stack/selenium/README.md`
 for the concrete case this affects.
 
 ## OIDC / Keycloak
 
-`.devcontainer/infra-stack/keycloak/` runs Keycloak with dev-mode realm
+`.devcontainer/stack/keycloak/` runs Keycloak with dev-mode realm
 auto-import (`realm-export.json`: realm `template-python`, public client
 `api`, test users `viewer`/`editor`/`security`/`maintainer`/`detective`,
 each with a password matching its username). `src/app/oidc.py` validates
@@ -210,14 +220,14 @@ the route-level convention.
 ## Three test suites
 
 `tests/` splits into `unit/` (no external services), `integration/`
-(the real infra-stack containers, no mocks — see
+(the real stack containers, no mocks — see
 `tests/integration/README.md`), and `e2e/` (Playwright, against the
-real `api` service). Unlike the other infra-stack services, `e2e/`
+real `api` service). Unlike the other stack services, `e2e/`
 doesn't exec into a sibling container from the host: Playwright runs as
 a `dev`-group package inside the devcontainer itself and drives a
-browser in the `selenium` infra-stack container remotely, over CDP — see
+browser in the `selenium` stack container remotely, over CDP — see
 `tests/e2e/conftest.py` and
-`.devcontainer/infra-stack/selenium/README.md`. The three suites never
+`.devcontainer/stack/selenium/README.md`. The three suites never
 import from one another. A plain `pytest` run collects `unit/` and
 `integration/`; `e2e/` is ignored by default (see `pyproject.toml`) and
 run explicitly with `uv run pytest tests/e2e`.

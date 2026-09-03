@@ -1,29 +1,32 @@
 # .devcontainer/
 
-- `devcontainer.json` — merges every compose file below and configures
-  the devcontainer (features, forwarded ports, editor settings).
+- `devcontainer.json` — references `compose.yml` as the devcontainer's
+  sole `dockerComposeFile`, and configures the devcontainer itself
+  (features, forwarded ports, editor settings).
 - `compose.yml` — the app service (`api`), built from the top-level
-  `Dockerfile`'s `develop` stage.
-- `infra-stack/` — one subdirectory per supporting service (Postgres,
+  `Dockerfile`'s `develop` stage, and an `include:` list that pulls in
+  every supporting service's own compose fragment below.
+- `stack/` — one subdirectory per supporting service (Postgres,
   RustFS, Redis, Keycloak, Selenium); see its own `README.md`.
 - `.env` — credential/config values shared between `compose.yml` and
-  `infra-stack/*/compose.yml` via Compose's own variable interpolation
+  `stack/*/compose.yml` via Compose's own variable interpolation
   (`${VAR}`) — not an application dotenv; see the file's own header
   comment and `CLAUDE.md`'s "Configuration" section.
 
 ## Do
 
-- Add a new compose fragment's path to `dockerComposeFile` in
-  `devcontainer.json` the same time you add the fragment — an
-  unreferenced file starts nothing.
+- Add a new compose fragment's path to `compose.yml`'s own `include:`
+  list the same time you add the fragment — an unreferenced file starts
+  nothing.
 - Keep service credentials and connection settings in the compose files'
   `environment:` blocks, so opening the devcontainer is the only setup
   step. A value one fragment owns and another needs (e.g. Postgres's
   password) goes in `.env` once, referenced from both, rather than
   hardcoded a second time.
-- Write a bind-mount source path as relative to this directory, even in
-  a fragment several levels under `infra-stack/` — see `CLAUDE.md`'s
-  "Devcontainer stack pattern" section for why.
+- Write a bind-mount source path in a fragment under `stack/` as
+  relative to that fragment's own directory, the same as if it were the
+  only Compose file in play — see `CLAUDE.md`'s "Devcontainer stack
+  pattern" section for why.
 
 ## Don't
 

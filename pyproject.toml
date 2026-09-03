@@ -4,7 +4,7 @@
 name = "template-python"
 version = "0.1.0"
 description = "Template repository for FastAPI projects"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi==0.141.1",
     "uvicorn[standard]==0.52.4",
@@ -24,6 +24,7 @@ dev = [
     "playwright==1.62.0",
     "pytest-playwright==0.9.0",
     "selenium==4.48.0",
+    "pytest-cov==7.0.0",
 ]
 
 [build-system]
@@ -35,7 +36,7 @@ packages = ["src/app"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 # Curated strict set: correctness + style + security (S) + pylint (PL) +
@@ -59,13 +60,13 @@ known-first-party = ["app"]
 "tests/**" = ["S101", "PLR2004"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 mypy_path = "src"
 strict = true
 warn_unreachable = true
 
 [tool.pytest.ini_options]
-addopts = "--strict-markers --strict-config -ra --ignore=tests/e2e"
+addopts = "--strict-markers --strict-config -ra --ignore=tests/e2e --cov=app --cov-report=term-missing"
 filterwarnings = [
     "error",
     # starlette 1.6.0's testclient module still references the anyio.abc.BlockingPortal
@@ -73,3 +74,30 @@ filterwarnings = [
     # a starlette bug, not ours to fix here.
     "ignore:The anyio\\.abc\\.BlockingPortal alias is deprecated.*:DeprecationWarning:starlette\\.testclient",
 ]
+
+[tool.coverage.run]
+# relative_files/parallel: tests/e2e's app process runs as a subprocess (see
+# tests/e2e/conftest.py and tests/e2e/sitecustomize.py), writing its own
+# parallel data file that pytest-cov combines with this process's at the end
+# of the run -- both must agree on relative paths to combine correctly.
+#
+# sigterm: without this, uvicorn's own SIGTERM handler (installed after
+# coverage.process_startup() runs) restores and re-raises through whatever
+# handler predates it -- Python's default, since coverage doesn't install
+# one unless asked -- which kills that process before its atexit-based save
+# ever runs. This makes coverage install a SIGTERM handler of its own, which
+# saves data first and is what ends up back in place by the time uvicorn
+# re-raises the signal it caught (tests/e2e/conftest.py stops that process
+# with SIGTERM).
+source = ["app"]
+branch = true
+parallel = true
+relative_files = true
+sigterm = true
+
+[tool.coverage.report]
+# Single source of truth for the coverage gate: both the plain `pytest` run
+# (tests/unit + tests/integration) and the explicit `pytest tests/e2e` run
+# enforce this same threshold -- see CLAUDE.md's "Three test suites" section.
+fail_under = 95
+show_missing = true

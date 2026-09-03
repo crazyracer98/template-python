@@ -5,7 +5,7 @@ Pure unit tests: no real external service, no network.
 ## Do
 
 - Reach for a fixture or mock when a route/function needs one of the
-  infra-stack services — that's what makes it a unit test.
+  stack services — that's what makes it a unit test.
 
 ## Don't
 

@@ -34,7 +34,7 @@ setup composed from independent, swappable pieces.
    the "FastAPI: api" launch config to run it under the debugger.
 3. Health check: `curl localhost:8000/health`. `/protected` needs a
    bearer token from Keycloak — see
-   `.devcontainer/infra-stack/keycloak/README.md`.
+   `.devcontainer/stack/keycloak/README.md`.
 
 Without a devcontainer: install [`uv`](https://docs.astral.sh/uv/), export
 your own `DATABASE_URL` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY` /
@@ -47,8 +47,10 @@ defaults), then
 ## Checks
 
 `ruff` (lint + format), `mypy --strict`, and `pytest` are all configured
-to fail on any violation — see `pyproject.toml`. Run everything at once
-with:
+to fail on any violation — see `pyproject.toml`. `pytest` also fails
+below 95% coverage of `src/app`, for both the default run
+(`tests/unit` + `tests/integration`) and `uv run pytest tests/e2e`. Run
+everything at once with:
 
 ```bash
 uv run prek run --all-files --hook-stage manual
@@ -64,15 +66,6 @@ command, inside the devcontainer itself, on every push and pull request.
 alpha/beta/rc/full release with an auto-generated changelog and the
 built image attached (and optionally pushed to an OCI registry) — see
 `.github/workflows/README.md`.
-
-## First-time lock file
-
-This template ships without `uv.lock`. Before the first build or
-`uv sync`, generate it once:
-
-```bash
-uv lock
-```
 
 ## Do
 

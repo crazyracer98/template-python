@@ -25,5 +25,5 @@ PostgreSQL 16, used as the primary application database.
 
 ## Removing this service
 
-Delete this directory and remove its compose file from the
-`dockerComposeFile` array in `.devcontainer/devcontainer.json`.
+Delete this directory and remove its compose file entry from
+`.devcontainer/compose.yml`'s `include:` list.

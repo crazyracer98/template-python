@@ -1,6 +1,11 @@
 # syntax=docker/dockerfile:1.7
 # Three-stage build for the app: develop (devcontainer), builder, runner.
 
+# PYTHON_VERSION is pinned to minor only, not an exact patch like every
+# other version in this file: mcr.microsoft.com/devcontainers/python (the
+# develop stage's base image below) only publishes tags at minor-version
+# granularity, so there is no patch tag to pin to. See CLAUDE.md's
+# "Dependency management" section.
 ARG PYTHON_VERSION=3.14
 ARG DEBIAN_VERSION=trixie
 

@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     # No .env file for the app itself: every value below is meant to come
     # from the process environment, which the compose files set directly
-    # (see .devcontainer/compose.yml and infra-stack/*/compose.yml) --
-    # some pulled straight from an infra-stack service's own env file,
+    # (see .devcontainer/compose.yml and stack/*/compose.yml) --
+    # some pulled straight from a stack service's own env file,
     # some (DATABASE_URL, s3_access_key/s3_secret_key) assembled below
     # from those raw pieces since Compose can't interpolate a value from
     # one env file into another compose file's own env var. See CLAUDE.md's

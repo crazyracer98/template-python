@@ -19,7 +19,7 @@ exist immediately — no manual admin-console setup required.
 - Issuer URL (from other containers): `http://keycloak:8080/realms/template-python`
 - Admin credentials and the `OIDC_*` URLs: defined in `keycloak.env`, next to this file
 
-Unlike the other infra-stack services, Keycloak's port is listed in
+Unlike the other stack services, Keycloak's port is listed in
 `forwardPorts` in `.devcontainer/devcontainer.json` so you can reach the
 login and admin UI from your host browser at `http://localhost:8080`. Since
 Keycloak runs in a sibling container rather than the primary `api` one, that
@@ -57,6 +57,7 @@ kcadm PUT /admin/realms/template-python/users/<id> '{"firstName": "Dev"}'
 
 ## Removing this service
 
-Delete this directory, remove its compose file from the
-`dockerComposeFile` array in `.devcontainer/devcontainer.json`, and remove
-`"keycloak:8080"` from `forwardPorts`/`portsAttributes` there too.
+Delete this directory, remove its compose file entry from
+`.devcontainer/compose.yml`'s `include:` list, and remove
+`"keycloak:8080"` from `forwardPorts`/`portsAttributes` in
+`devcontainer.json` too.

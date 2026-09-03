@@ -20,8 +20,8 @@ def test_decode_bearer_token_accepts_a_real_keycloak_token() -> None:
         data={
             "grant_type": "password",
             "client_id": settings.oidc_client_id,
-            "username": "devuser",
-            "password": "devuser",
+            "username": "viewer",
+            "password": "viewer",
         },
         timeout=10,
     )
@@ -30,4 +30,4 @@ def test_decode_bearer_token_accepts_a_real_keycloak_token() -> None:
 
     claims = decode_bearer_token(access_token)
 
-    assert claims["preferred_username"] == "devuser"
+    assert claims["preferred_username"] == "viewer"

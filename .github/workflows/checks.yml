@@ -43,10 +43,5 @@ jobs:
         if: always()
         run: |
           docker compose \
-            -f .devcontainer/compose.yml \
-            -f .devcontainer/infra-stack/postgres/compose.yml \
-            -f .devcontainer/infra-stack/s3/compose.yml \
-            -f .devcontainer/infra-stack/redis/compose.yml \
-            -f .devcontainer/infra-stack/keycloak/compose.yml \
-            -f .devcontainer/infra-stack/playwright/compose.yml \
+            -p ${{ env.COMPOSE_PROJECT_NAME }} \
             down --volumes --remove-orphans

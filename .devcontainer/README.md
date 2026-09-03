@@ -5,7 +5,7 @@
 - `compose.yml` — the app service (`api`), built from the top-level
   `Dockerfile`'s `develop` stage.
 - `infra-stack/` — one subdirectory per supporting service (Postgres,
-  RustFS, Redis, Keycloak, Playwright); see its own `README.md`.
+  RustFS, Redis, Keycloak, Selenium); see its own `README.md`.
 - `.env` — credential/config values shared between `compose.yml` and
   `infra-stack/*/compose.yml` via Compose's own variable interpolation
   (`${VAR}`) — not an application dotenv; see the file's own header

@@ -6,7 +6,7 @@ setup composed from independent, swappable pieces.
 ## Contents
 
 - `.devcontainer/` — the devcontainer setup; see its `README.md`.
-- `.github/` — CI and release workflows; see its `README.md`.
+- `.github/` — CI and release workflows; see its `CONTENTS.md`.
 - `.vscode/` — editor settings, tasks, launch config; see its `README.md`.
 - `.claude/` — Claude Code CLI project config; see its `README.md`.
 - `src/` — the application source; see its `README.md`.
@@ -28,8 +28,8 @@ setup composed from independent, swappable pieces.
    `.vscode/extensions.json` recommends the extension that offers this —
    or any tool that reads `.devcontainer/devcontainer.json`). This starts
    the app alongside Postgres, RustFS (S3), Redis, Keycloak (OIDC), and a
-   Playwright container for e2e tests; installs dependencies; and
-   installs the git hooks, all via `postCreateCommand`.
+   Selenium container Playwright drives remotely for e2e tests; installs
+   dependencies; and installs the git hooks, all via `postCreateCommand`.
 2. Run the app: `uvicorn app.main:app --reload --host 0.0.0.0`, or use
    the "FastAPI: api" launch config to run it under the debugger.
 3. Health check: `curl localhost:8000/health`. `/protected` needs a

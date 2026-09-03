@@ -18,14 +18,80 @@
   ],
   "users": [
     {
-      "username": "devuser",
+      "username": "viewer",
       "enabled": true,
-      "email": "devuser@example.com",
+      "email": "vera.vance@blub.com",
       "emailVerified": true,
+      "firstName": "Vera",
+      "lastName": "Vance",
       "credentials": [
         {
           "type": "password",
-          "value": "devuser",
+          "value": "viewer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
+    },
+    {
+      "username": "editor",
+      "enabled": true,
+      "email": "edgar.ellis@blub.com",
+      "emailVerified": true,
+      "firstName": "Edgar",
+      "lastName": "Ellis",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "editor",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
+    },
+    {
+      "username": "security",
+      "enabled": true,
+      "email": "sam.sentinel@blub.com",
+      "emailVerified": true,
+      "firstName": "Sam",
+      "lastName": "Sentinel",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "security",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
+    },
+    {
+      "username": "maintainer",
+      "enabled": true,
+      "email": "mia.mason@blub.com",
+      "emailVerified": true,
+      "firstName": "Mia",
+      "lastName": "Mason",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "maintainer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
+    },
+    {
+      "username": "detective",
+      "enabled": true,
+      "email": "dana.drake@blub.com",
+      "emailVerified": true,
+      "firstName": "Dana",
+      "lastName": "Drake",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "detective",
           "temporary": false
         }
       ],

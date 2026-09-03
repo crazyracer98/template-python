@@ -10,6 +10,12 @@ directory you're about to change, in order (e.g. before touching
 `src/app/README.md`). A directory's rules build on its parents'; a change
 that's fine at the root can still violate a rule set closer to the file.
 
+The one exception is `.github/`: its directory doc is named
+`CONTENTS.md`, not `README.md`. GitHub renders `.github/README.md` as
+the repository's homepage in place of the root `README.md` if one
+exists there, which would bury the actual project overview — naming it
+`CONTENTS.md` keeps the per-directory doc without triggering that.
+
 ## Keeping this file current
 
 When a prompt establishes a new method or convention for this repository
@@ -69,10 +75,12 @@ duplicates or re-pins it elsewhere:
   authoritative because it's the file closer to where they're used. To
   change them, edit the `Dockerfile`, not the compose file.
 - Python package versions: `pyproject.toml` (see "Dependency management"
-  below) — including across `[project.optional-dependencies]` groups; a
-  group that needs another group's packages references it as a
-  self-referential extra (e.g. `"template-python[dev]"`) instead of
-  re-pinning the same package a second time.
+  below). All development-only tooling — linters, type checker, test
+  runners, Playwright — lives in the single `dev` optional-dependencies
+  group rather than split across several groups, since it's all
+  development-related; if a future group needs another group's packages,
+  reference it as a self-referential extra (e.g. `"template-python[dev]"`,
+  per PEP 621) instead of re-pinning the same package a second time.
 - Everything else pinned (base images, Actions, hook revisions): pinned
   once, at its single point of use.
 
@@ -189,11 +197,13 @@ for the concrete case this affects.
 
 `.devcontainer/infra-stack/keycloak/` runs Keycloak with dev-mode realm
 auto-import (`realm-export.json`: realm `template-python`, public client
-`api`, test user `devuser`/`devuser`). `src/app/oidc.py` validates bearer
-tokens against it via generic OIDC discovery + JWKS (`PyJWKClient`), with
-no Keycloak-specific code — any Authorization Code + PKCE provider works
-by pointing `OIDC_ISSUER_URL`/`OIDC_AUTHORIZATION_URL`/`OIDC_TOKEN_URL`
-elsewhere. Add auth to a route with `Depends(get_current_claims)`; routes
+`api`, test users `viewer`/`editor`/`security`/`maintainer`/`detective`,
+each with a password matching its username). `src/app/oidc.py` validates
+bearer tokens against it via generic OIDC discovery + JWKS
+(`PyJWKClient`), with no Keycloak-specific code — any Authorization Code
++ PKCE provider works by pointing
+`OIDC_ISSUER_URL`/`OIDC_AUTHORIZATION_URL`/`OIDC_TOKEN_URL` elsewhere. Add
+auth to a route with `Depends(get_current_claims)`; routes
 that don't take that dependency stay public. See `src/app/README.md` for
 the route-level convention.
 
@@ -202,12 +212,15 @@ the route-level convention.
 `tests/` splits into `unit/` (no external services), `integration/`
 (the real infra-stack containers, no mocks — see
 `tests/integration/README.md`), and `e2e/` (Playwright, against the
-real `api` service, run inside the dedicated `playwright` infra-stack
-container — see `.devcontainer/infra-stack/playwright/README.md` for
-why these can only be run from a host terminal, never from the
-devcontainer's own terminal). The three suites never import from one
-another. A plain `pytest` run collects `unit/` and `integration/`;
-`e2e/` is ignored by default (see `pyproject.toml`).
+real `api` service). Unlike the other infra-stack services, `e2e/`
+doesn't exec into a sibling container from the host: Playwright runs as
+a `dev`-group package inside the devcontainer itself and drives a
+browser in the `selenium` infra-stack container remotely, over CDP — see
+`tests/e2e/conftest.py` and
+`.devcontainer/infra-stack/selenium/README.md`. The three suites never
+import from one another. A plain `pytest` run collects `unit/` and
+`integration/`; `e2e/` is ignored by default (see `pyproject.toml`) and
+run explicitly with `uv run pytest tests/e2e`.
 
 ## VS Code
 

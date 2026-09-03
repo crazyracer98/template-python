@@ -1,3 +1,4 @@
 {
-  "git.commandsToLog": ["commit", "push"]
+  "git.commandsToLog": ["commit", "push"],
+  "workbench.browser.enableRemoteProxy": true
 }

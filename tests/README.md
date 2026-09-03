@@ -6,8 +6,9 @@ Pytest tests, split into three independent suites:
 - `integration/` — reaches the real infra-stack containers (already
   running under the devcontainer, and under CI via `devcontainers/ci`) —
   no mocks.
-- `e2e/` — Playwright tests against the live `api` service; see its own
-  `README.md` for why these run separately, from a host terminal.
+- `e2e/` — Playwright tests against the live `api` service, driving a
+  browser in the `selenium` infra-stack container remotely; see its own
+  `README.md`.
 
 A plain `pytest` run collects `unit/` and `integration/` (both work
 inside the devcontainer / CI as-is) and ignores `e2e/` (see

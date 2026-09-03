@@ -20,13 +20,10 @@ dev = [
     "ruff==0.16.5",
     "mypy==2.3.1",
     "prek==0.5.2",
-]
-# References its own "dev" extra (a self-referential extra, per PEP 621) so
-# pytest's version is defined once, in "dev", rather than pinned again here.
-e2e = [
-    "template-python[dev]",
+    "httpx2==2.12.0",
     "playwright==1.62.0",
     "pytest-playwright==0.9.0",
+    "selenium==4.48.0",
 ]
 
 [build-system]
@@ -69,4 +66,10 @@ warn_unreachable = true
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config -ra --ignore=tests/e2e"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # starlette 1.6.0's testclient module still references the anyio.abc.BlockingPortal
+    # alias that anyio 4.15.0 deprecated in favor of anyio.from_thread.BlockingPortal --
+    # a starlette bug, not ours to fix here.
+    "ignore:The anyio\\.abc\\.BlockingPortal alias is deprecated.*:DeprecationWarning:starlette\\.testclient",
+]

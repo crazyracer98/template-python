@@ -3,7 +3,7 @@ include:
   - ./stack/s3/compose.yml
   - ./stack/keycloak/compose.yml
   - ./stack/redis/compose.yml
-  - ./stack/playwright/compose.yml
+  - ./stack/selenium/compose.yml
 
 # App service: the FastAPI application itself, built from the top-level
 # Dockerfile's `develop` stage. The workspace is bind-mounted so source

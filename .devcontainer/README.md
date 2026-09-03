@@ -13,6 +13,25 @@
   (`${VAR}`) — not an application dotenv; see the file's own header
   comment and `CLAUDE.md`'s "Configuration" section.
 
+## SSH agent forwarding
+
+`devcontainer.json`'s `mounts` bind-mounts the host's SSH agent socket
+(`${localEnv:SSH_AUTH_SOCK}`) to `/ssh-agent`, and `remoteEnv` points
+`SSH_AUTH_SOCK` at it, so `git push` over SSH inside the container
+authenticates against the same agent and keys already loaded on the
+host — no key material is ever copied into the container. This requires
+an agent to actually be running on the host with `SSH_AUTH_SOCK` set
+*in the process VS Code itself launches from* (e.g. running `code .`
+from the same shell that started the agent) before connecting, and a
+full "Rebuild Container" (mounts don't apply to an already-running
+container) after this file changes. If `SSH_AUTH_SOCK` is unset when
+the container is created (true for `devcontainers/ci` in
+`.github/workflows/checks.yml` — GitHub Actions runners have no agent),
+`@devcontainers/cli` drops the empty source and the mount degrades to a
+plain anonymous volume at `/ssh-agent` instead of erroring — `ssh`/`git`
+inside the container then fall back to failing the way they did before
+this was added, which is harmless there since CI never pushes.
+
 ## Do
 
 - Add a new compose fragment's path to `compose.yml`'s own `include:`

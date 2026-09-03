@@ -26,6 +26,12 @@
       "onAutoForward": "notify"
     }
   },
+  "mounts": [
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+  ],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "/ssh-agent"
+  },
   "postCreateCommand": "git config --global --add safe.directory /workspace && uv sync --extra dev && uv run prek install",
   "customizations": {
     "vscode": {

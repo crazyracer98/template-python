@@ -517,3 +517,12 @@ registry push and the variables/secrets it reads.
   see its `README.md`) and `docs/plans/` (in-progress/upcoming work).
 - A directory's own `README.md` — the structure and syntax of that
   directory's own contents only, not the wider repo.
+
+A plan under `docs/plans/` is transient: once its work has been executed,
+that plan file doesn't linger. Either delete it, or — if it captured
+knowledge worth keeping (an ADR-worthy decision, reference material for
+future work) — convert it into that something-else elsewhere in `docs/`
+(e.g. `docs/adrs/`) and remove it from `docs/plans/`. Either way, print a
+brief commit message summarizing the change for the user to use (this
+doesn't mean creating the commit yourself — see "Committing changes"
+guidance elsewhere; just surface the message).

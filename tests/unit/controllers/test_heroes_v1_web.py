@@ -45,3 +45,12 @@ def test_hero_v1_components_js_defines_custom_elements() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/javascript")
     assert "customElements.define" in response.text
+
+
+def test_v1_form_page_carries_deprecation_headers(authed: None) -> None:
+    """GET /v1/heroes/form carries Sunset/Deprecation/Link headers."""
+    response = client.get("/v1/heroes/form")
+    assert response.status_code == 200
+    assert response.headers["Deprecation"] == "true"
+    assert "Sunset" in response.headers
+    assert response.headers["Link"] == '</v2/heroes>; rel="sunset"'

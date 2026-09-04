@@ -7,9 +7,41 @@ view -- converting to and from the backing ORM model via the view's own
 conversion happens, so a new resource never needs its own CRUD class.
 """
 
+from typing import Protocol
+
 from pydantic import BaseModel
 
 from app.repositories.base import Repository
+
+
+class CRUDLike[SchemaT: BaseModel](Protocol):
+    """Structural shape both CRUDInterface and CompatCRUD satisfy.
+
+    Lets app.controllers.crud_router's router factories depend on "anything with
+    these five async methods" rather than concretely on CRUDInterface, so the same
+    factory builds both a current-version router (backed by CRUDInterface) and a
+    deprecated one (backed by app.crud.compat.CompatCRUD) identically.
+    """
+
+    async def get(self, record_id: int) -> SchemaT | None:
+        """Return the record with the given id as a view, or None if it doesn't exist."""
+        ...  # pragma: no cover -- Protocol stub, never executed directly
+
+    async def list(self, *, skip: int = 0, limit: int = 100) -> list[SchemaT]:
+        """Return up to `limit` records as views, skipping the first `skip`."""
+        ...  # pragma: no cover -- Protocol stub, never executed directly
+
+    async def create(self, data: BaseModel) -> SchemaT:
+        """Create a record from the given input view and return it as a view."""
+        ...  # pragma: no cover -- Protocol stub, never executed directly
+
+    async def update(self, record_id: int, data: BaseModel) -> SchemaT | None:
+        """Apply the given input view's set fields to the record, if it exists."""
+        ...  # pragma: no cover -- Protocol stub, never executed directly
+
+    async def delete(self, record_id: int) -> bool:
+        """Delete the record with the given id; return whether it existed."""
+        ...  # pragma: no cover -- Protocol stub, never executed directly
 
 
 class CRUDInterface[SchemaT: BaseModel, ModelT]:

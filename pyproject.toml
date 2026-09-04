@@ -74,6 +74,11 @@ known-first-party = ["app"]
 # assert is the point of a test, and comparing to literal expected values
 # is not a "magic number". Covers tests/ and tests/e2e/ alike.
 "tests/**" = ["S101", "PLR2004"]
+# crud_router.py's factories take one named parameter per route-building option
+# (prefix/roles/schemas/etc, PLR0913) and pass FastAPI Depends(...)/role objects
+# through untyped (ANN401) -- both are inherent to genericizing route wiring
+# itself, not accidental complexity; see the module docstring.
+"src/app/controllers/crud_router.py" = ["ANN401", "PLR0913"]
 
 [tool.importlinter]
 # Enforces src/app/CLAUDE.md's strict import order between app/'s directories: each

@@ -2,67 +2,29 @@
 
 Reuses app.controllers.heroes_v1's CRUD dependency/RBAC dependencies directly
 rather than duplicating them (same "controllers" import-linter layer, so this
-is an intra-layer import, not a cross-layer one).
+is an intra-layer import, not a cross-layer one). Also applies the same
+sunset(...) router dependency heroes_v1.py does, so XML responses carry the
+same Sunset/Deprecation/Link headers as the JSON v1 routes.
 """
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import Depends
 
-from app.controllers.heroes_v1 import (
-    DeleteRoles,
-    HeroV1CRUD,
-    ReadRoles,
-    WriteRoles,
-)
+from app.controllers.crud_router import build_xml_router
+from app.controllers.heroes_v1 import SUNSET_AT, DeleteRoles, HeroV1CRUD, ReadRoles, WriteRoles
+from app.http_headers import sunset
 from app.views.hero_v1 import HeroV1Create, HeroV1Update
-from app.xml_codec import from_xml, to_xml
 
-router = APIRouter(prefix="/heroes/xml", tags=["heroes"])
-
-_XML_MEDIA_TYPE = "application/xml"
-
-
-@router.get("", dependencies=[ReadRoles])
-async def list_heroes_v1_xml(crud: HeroV1CRUD, skip: int = 0, limit: int = 100) -> Response:
-    """List heroes as an XML document, in the deprecated v1 shape."""
-    heroes = await crud.list(skip=skip, limit=limit)
-    body = "<heroes>" + "".join(to_xml(hero, "hero") for hero in heroes) + "</heroes>"
-    return Response(content=body, media_type=_XML_MEDIA_TYPE)
-
-
-@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[WriteRoles])
-async def create_hero_v1_xml(crud: HeroV1CRUD, request: Request) -> Response:
-    """Create a hero from a v1-shaped XML request body."""
-    hero = from_xml(await request.body(), HeroV1Create)
-    created = await crud.create(hero)
-    return Response(
-        content=to_xml(created, "hero"),
-        media_type=_XML_MEDIA_TYPE,
-        status_code=status.HTTP_201_CREATED,
-    )
-
-
-@router.get("/{hero_id:int}", dependencies=[ReadRoles])
-async def get_hero_v1_xml(hero_id: int, crud: HeroV1CRUD) -> Response:
-    """Get a hero by id, as an XML document, in the deprecated v1 shape."""
-    hero = await crud.get(hero_id)
-    if hero is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hero not found")
-    return Response(content=to_xml(hero, "hero"), media_type=_XML_MEDIA_TYPE)
-
-
-@router.patch("/{hero_id:int}", dependencies=[WriteRoles])
-async def update_hero_v1_xml(hero_id: int, crud: HeroV1CRUD, request: Request) -> Response:
-    """Partially update a hero from a v1-shaped XML request body."""
-    hero = from_xml(await request.body(), HeroV1Update)
-    updated = await crud.update(hero_id, hero)
-    if updated is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hero not found")
-    return Response(content=to_xml(updated, "hero"), media_type=_XML_MEDIA_TYPE)
-
-
-@router.delete("/{hero_id:int}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[DeleteRoles])
-async def delete_hero_v1_xml(hero_id: int, crud: HeroV1CRUD) -> None:
-    """Delete a hero."""
-    deleted = await crud.delete(hero_id)
-    if not deleted:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hero not found")
+router = build_xml_router(
+    prefix="/heroes/xml",
+    tags=["heroes"],
+    resource_label="Hero",
+    item_tag="hero",
+    list_tag="heroes",
+    create_schema=HeroV1Create,
+    update_schema=HeroV1Update,
+    crud_dependency=HeroV1CRUD,
+    read_roles=ReadRoles,
+    write_roles=WriteRoles,
+    delete_roles=DeleteRoles,
+    router_dependencies=[Depends(sunset(SUNSET_AT, link="/v2/heroes/xml"))],
+)

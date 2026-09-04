@@ -134,14 +134,14 @@ not a per-request one.
   sets `ENV MODE=production` as the single source of truth for that
   default.
 
-A resource that wants `MODE=mock` support adds its own
-`InMemoryRepository`-backed branch the way `controllers.heroes.
-get_hero_crud` does — keep the dependency's signature identical across
-modes (an unused `AsyncSession`'s `commit()` never opens a connection, so
-depending on `get_db` unconditionally and branching on `settings.mode`
-inside the function body is both simpler and satisfies mypy's
-identical-conditional-signature check, versus two differently-signatured
-functions).
+A resource that wants `MODE=mock` support builds its CRUD dependency from
+`app.crud.dependency.build_repository_provider(Model)` the way
+`controllers.heroes.get_hero_crud` does — keep the dependency's signature
+identical across modes (an unused `AsyncSession`'s `commit()` never opens
+a connection, so depending on `get_db` unconditionally and letting
+`build_repository_provider` branch on `settings.mode` internally is both
+simpler and satisfies mypy's identical-conditional-signature check, versus
+two differently-signatured functions).
 
 ## Structured logging / OTEL
 

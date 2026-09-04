@@ -10,8 +10,9 @@ code, only the version-compatibility shape.
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends
 
+from app.controllers.crud_router import build_json_router
 from app.controllers.heroes import DeleteRoles, HeroCRUD, ReadRoles, WriteRoles
 from app.crud.compat import CompatCRUD
 from app.http_headers import sunset
@@ -26,18 +27,13 @@ from app.views.hero_v1 import (
     hero_v1_update_to_v2,
 )
 
-# DeleteRoles/ReadRoles/WriteRoles are re-exported for heroes_v1_xml.py/heroes_v1_web.py to
-# import, same as app.controllers.heroes does for heroes_xml.py/heroes_web.py -- mypy --strict's
-# implicit_reexport=False needs this listed explicitly, since they're imported here, not defined.
-__all__ = ["DeleteRoles", "HeroV1CRUD", "ReadRoles", "WriteRoles"]
+# DeleteRoles/ReadRoles/WriteRoles/SUNSET_AT are re-exported for heroes_v1_xml.py/
+# heroes_v1_web.py to import, same as app.controllers.heroes does for
+# heroes_xml.py/heroes_web.py -- mypy --strict's implicit_reexport=False needs
+# this listed explicitly, since they're imported here, not defined.
+__all__ = ["SUNSET_AT", "DeleteRoles", "HeroV1CRUD", "ReadRoles", "WriteRoles"]
 
-_SUNSET_AT = datetime(2027, 1, 1, tzinfo=UTC)
-
-router = APIRouter(
-    prefix="/heroes",
-    tags=["heroes"],
-    dependencies=[Depends(sunset(_SUNSET_AT, link="/v2/heroes"))],
-)
+SUNSET_AT = datetime(2027, 1, 1, tzinfo=UTC)
 
 
 def get_hero_v1_crud(crud: HeroCRUD) -> CompatCRUD[HeroV1, Hero, HeroModel]:
@@ -52,40 +48,16 @@ def get_hero_v1_crud(crud: HeroCRUD) -> CompatCRUD[HeroV1, Hero, HeroModel]:
 
 HeroV1CRUD = Annotated[CompatCRUD[HeroV1, Hero, HeroModel], Depends(get_hero_v1_crud)]
 
-
-@router.get("", dependencies=[ReadRoles])
-async def list_heroes_v1(crud: HeroV1CRUD, skip: int = 0, limit: int = 100) -> list[HeroV1]:
-    """List heroes in the deprecated v1 shape."""
-    return await crud.list(skip=skip, limit=limit)
-
-
-@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[WriteRoles])
-async def create_hero_v1(hero: HeroV1Create, crud: HeroV1CRUD) -> HeroV1:
-    """Create a hero from a v1-shaped payload."""
-    return await crud.create(hero)
-
-
-@router.get("/{hero_id:int}", dependencies=[ReadRoles])
-async def get_hero_v1(hero_id: int, crud: HeroV1CRUD) -> HeroV1:
-    """Get a hero by id, in the deprecated v1 shape."""
-    hero = await crud.get(hero_id)
-    if hero is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hero not found")
-    return hero
-
-
-@router.patch("/{hero_id:int}", dependencies=[WriteRoles])
-async def update_hero_v1(hero_id: int, hero: HeroV1Update, crud: HeroV1CRUD) -> HeroV1:
-    """Partially update a hero via a v1-shaped payload."""
-    updated = await crud.update(hero_id, hero)
-    if updated is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hero not found")
-    return updated
-
-
-@router.delete("/{hero_id:int}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[DeleteRoles])
-async def delete_hero_v1(hero_id: int, crud: HeroV1CRUD) -> None:
-    """Delete a hero."""
-    deleted = await crud.delete(hero_id)
-    if not deleted:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hero not found")
+router = build_json_router(
+    prefix="/heroes",
+    tags=["heroes"],
+    resource_label="Hero",
+    schema=HeroV1,
+    create_schema=HeroV1Create,
+    update_schema=HeroV1Update,
+    crud_dependency=HeroV1CRUD,
+    read_roles=ReadRoles,
+    write_roles=WriteRoles,
+    delete_roles=DeleteRoles,
+    router_dependencies=[Depends(sunset(SUNSET_AT, link="/v2/heroes"))],
+)

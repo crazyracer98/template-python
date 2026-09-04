@@ -81,3 +81,18 @@ def test_hero_v1_xml_delete_missing_returns_404(authed: None) -> None:
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
+
+
+def test_v1_xml_responses_carry_deprecation_headers(authed: None) -> None:
+    """Every /v1/heroes/xml response carries Sunset/Deprecation/Link headers."""
+    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
+        schema=Hero, repository=InMemoryRepository(HeroModel)
+    )
+    try:
+        response = client.get("/v1/heroes/xml")
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+    assert response.status_code == 200
+    assert response.headers["Deprecation"] == "true"
+    assert "Sunset" in response.headers
+    assert response.headers["Link"] == '</v2/heroes/xml>; rel="sunset"'

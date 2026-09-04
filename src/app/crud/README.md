@@ -6,22 +6,37 @@ repository (`app.repositories`) to persist it through, and it exposes
 resource never needs its own CRUD class, only a model, a view, and a
 router that wires the two through `CRUDInterface`.
 
-- `base.py` — `CRUDInterface[SchemaT, ModelT]`. Converts to/from the
-  backing ORM model entirely via the view's own `from_attributes`
-  support (see `app.views.base.ORMView`) — this module has no
-  resource-specific code and imports nothing from `app.views` or
-  `app.repositories` beyond their base types.
+- `base.py` — `CRUDInterface[SchemaT, ModelT]`, and the `CRUDLike[SchemaT]`
+  `Protocol` describing its `get`/`list`/`create`/`update`/`delete` shape.
+  `CRUDInterface` converts to/from the backing ORM model entirely via the
+  view's own `from_attributes` support (see `app.views.base.ORMView`) —
+  this module has no resource-specific code and imports nothing from
+  `app.views` or `app.repositories` beyond their base types. `CompatCRUD`
+  (below) satisfies `CRUDLike` too, structurally — `../controllers/
+  crud_router.py`'s router factories are written against `CRUDLike`
+  rather than concretely against `CRUDInterface`, specifically so the same
+  factory builds both a current-version router and a deprecated one.
 - `compat.py` — `CompatCRUD`, a generic wrapper that adapts a current
   `CRUDInterface` to speak in terms of an older (deprecated) API
   version's view, via caller-supplied converter functions. The building
   block for a resource that's grown a deprecated version — see
   `../controllers/README.md`'s "API and model versioning" and
   `docs/adrs/0002-api-and-model-versioning.md`.
+- `dependency.py` — `build_repository_provider(model)`, the one genuinely
+  duplicated fragment of a resource's `get_<resource>_crud`: choosing an
+  `InMemoryRepository` (MODE=mock, built once and shared across requests)
+  vs. a request-scoped `SQLAlchemyRepository`. Returns a
+  `Callable[[AsyncSession], Repository[ModelT]]` a controller calls with
+  its request's session — see `app.controllers.heroes` for the pattern.
+  The route-level factories built on top of `CRUDInterface`/`CompatCRUD`
+  (`build_json_router`/`build_xml_router`/`build_web_router`) live in
+  `../controllers/crud_router.py`, one layer up — see `../controllers/
+  README.md`'s "Generic CRUD router factories".
 
 ## Do
 
-- Build one per request, in the controller, from the concrete view and
-  a `SQLAlchemyRepository` bound to that request's session — see
+- Build one `CRUDInterface` per request, in the controller, from the
+  concrete view and `build_repository_provider(Model)(session)` — see
   `app.controllers.heroes.get_hero_crud` for the pattern.
 
 ## Don't

@@ -24,21 +24,52 @@ Add a role requirement to a route with `dependencies=[Depends
 `Depends(...)` constant reused across a router's routes — see
 `heroes.py`'s `ReadRoles`/`WriteRoles`/`DeleteRoles`.
 
-## Multi-format CRUD
+## Generic CRUD router factories
 
-A resource's JSON CRUD router can grow sibling routers on separate
-endpoints, following `heroes_xml.py`/`heroes_web.py`'s pattern: reuse
-the JSON router's `<Resource>CRUD` dependency and role dependencies
-directly (an intra-layer import — both routers stay in
-`app.controllers`) rather than duplicating them. `app.xml_codec.
-to_xml`/`from_xml` (generic over any flat Pydantic model) and
-`app.web_components.render_crud_form`/`render_crud_component_js`
-(generic over resource name/field list/API base path) are the reusable
-pieces; only the router wiring is resource-specific. A route whose path
-could otherwise collide with a resource's `/{id}` route (e.g.
-`/heroes/xml`) needs that id parameter typed as `{id:int}` — Starlette's
-typed path converter, so a non-integer literal segment never matches it,
-regardless of router registration order.
+`crud_router.py`'s `build_json_router`/`build_xml_router`/`build_web_router`
+build a resource's list/create/get/update/delete routes (or, for
+`build_web_router`, its `/form` + `/components.js` routes) internally, as
+closures over the Pydantic views and CRUD dependency passed to them —
+`heroes.py`/`heroes_xml.py`/`heroes_web.py` (and their `*_v1*` siblings)
+are one declarative call each, not hand-written route functions. Each
+factory takes `crud_dependency` as an `Annotated[app.crud.base.CRUDLike[...],
+Depends(...)]`-shaped value — `CRUDLike` is a `Protocol` both
+`CRUDInterface` (current version) and `CompatCRUD` (deprecated version,
+see "API and model versioning" below) satisfy structurally, so the same
+three factories build both. A route whose path could otherwise collide
+with a resource's `/{record_id}` route (e.g. `/heroes/xml`) needs that id
+parameter typed as `{record_id:int}` — Starlette's typed path converter,
+so a non-integer literal segment never matches it, regardless of router
+registration order; the factories do this uniformly, so every resource's
+path param is named `record_id` in the generated OpenAPI docs regardless
+of the resource's own id-field name.
+
+The generated route functions' `crud`/`record` parameters are annotated
+with a TypeVar-bound runtime value (e.g. `create_schema`, a `type[CreateT]`
+parameter of the enclosing factory) — mypy cannot resolve that statically,
+so those specific lines carry a narrow `# type: ignore[valid-type]`/
+`# type: ignore[no-any-return]`, justified by `crud_router.py`'s own module
+docstring; the factories' own public signatures stay fully strict-typed, so
+a caller like `heroes.py` gets normal type-checking on its
+`build_json_router(...)` call.
+
+`build_xml_router`/`build_web_router`'s routes construct and return their
+own `Response`/`RedirectResponse` directly (XML bodies, redirects, JS) —
+FastAPI does **not** merge a `dependencies=[...]` entry's `response.headers`
+mutations (e.g. `app.http_headers.sunset(...)`, see "API and model
+versioning" below) into a route's own returned `Response`, only into its
+own auto-built one, so every such route also takes the injected
+`response: Response` and merges it in via `crud_router.py`'s private
+`_with_dependency_headers` before returning. Skipping this silently drops
+router-level headers on every XML/web route with no visible error — this
+bit `heroes_v1_xml.py`/`heroes_v1_web.py` (see "API and model versioning").
+
+`build_web_router`'s `/form` POST route parses `Request.form()` generically
+(field names aren't known until the factory is called, so a typed
+`Form()` parameter per field isn't possible) — it attaches an
+`openapi_extra` describing each field as a required string so Swagger UI
+still documents the submission shape, rather than showing an undocumented
+body.
 
 ## API and model versioning
 
@@ -54,23 +85,30 @@ A deprecated version follows the `*_vN.py` pattern: a `views/hero_vN.py`
 module defining that version's Pydantic shape plus pure converter
 functions to/from the current version's views (see
 `app.views.hero_v1`), and a sibling controller set
-(`heroes_v1.py`/`heroes_v1_xml.py`/`heroes_v1_web.py`) that mirrors the
-current version's — the same sibling-router reuse "Multi-format CRUD"
-above already uses, just versioned instead of format-varied.
-`app.crud.compat.CompatCRUD` is the reusable wrapper that adapts the
-current version's `CRUDInterface` to speak in the deprecated view's
-shape, so the deprecated router needs no new persistence wiring — see
-`app.crud.README.md`. Apply `app.http_headers.sunset(...)` once as a
-`dependencies=[...]` entry on the deprecated router itself (not per
-route) so every route under it advertises `Sunset`/`Deprecation`/`Link`
-headers at once, pointing at the current version's path.
+(`heroes_v1.py`/`heroes_v1_xml.py`/`heroes_v1_web.py`) that calls the
+same three factories "Generic CRUD router factories" above describes,
+with `crud_dependency` pointing at a `CompatCRUD`-typed dependency instead
+of a `CRUDInterface`-typed one. `app.crud.compat.CompatCRUD` is the
+reusable wrapper that adapts the current version's `CRUDInterface` to
+speak in the deprecated view's shape, so the deprecated router needs no
+new persistence wiring — see `app.crud.README.md`. Apply
+`app.http_headers.sunset(...)` via each deprecated router's
+`router_dependencies=[...]` factory argument (not per route) so every
+route under it advertises `Sunset`/`Deprecation`/`Link` headers at once,
+pointing at the current version's equivalent path — every deprecated
+sibling (JSON/XML/web alike) does this, so responses in every format
+carry the same headers.
 
 ## Do
 
-- Add a new resource's router as its own module here, following
-  `heroes.py`'s shape: a per-request `CRUDInterface` builder function
-  (`get_<resource>_crud`, depended on via `Annotated[..., Depends(...)]`
-  for reuse across that router's routes), then the routes themselves.
+- Add a new resource's router as its own module here: a per-request
+  `CRUDInterface` builder function (`get_<resource>_crud`, depended on via
+  `Annotated[..., Depends(...)]` for reuse across that router's routes,
+  following `heroes.py`'s shape — `app.crud.dependency.
+  build_repository_provider` supplies the MODE-aware repository it wraps),
+  then one `build_json_router(...)` call (plus `build_xml_router`/
+  `build_web_router` for the sibling formats "Generic CRUD router
+  factories" above describes).
 - Add auth to a route with `Depends(get_current_claims)` from
   `app.oidc` — a route with no such dependency is public.
 - `include_router` a new router in `app.main`.

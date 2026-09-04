@@ -92,6 +92,13 @@ assembles them into the settings the app itself reads.
   the default, `-noble` vs. another base OS) isn't this kind of
   precision and stays.
 
+## Keeping the architecture doc current
+
+Adding or removing a stack service, or changing how one connects
+(`depends_on`/healthcheck, a newly forwarded port) makes
+`../../docs/architecture.md`'s diagram stale — update it in the same
+change.
+
 ## Don't
 
 - Add a `ports:` entry to any fragment here. These are backend services

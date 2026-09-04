@@ -5,6 +5,10 @@ repository is laid out or how it's developed (each directory's own
 `README.md` covers that; see the root `README.md`) and not the
 AI-assisted coding workflow (`CLAUDE.md` at the repo root covers that).
 
+- `architecture.md` — infrastructure/deployment view: services, how
+  they connect, and the devcontainer vs. smoke-test stacks.
+- `system-design.md` — application-level view: layering, request flow,
+  and key design decisions.
 - `adrs/` — Architecture Decision Records: app-specific decisions and
   the reasoning behind them. See `adrs/README.md`.
 - `plans/` — working plans for in-progress or upcoming work. See

@@ -21,8 +21,9 @@ def test_database_url_assembles_dsn_from_pieces() -> None:
     assert settings.database_url == "postgresql+asyncpg://u:p@h:1234/d"
 
 
-def test_production_mode_requires_oidc_audience() -> None:
+def test_production_mode_requires_oidc_audience(monkeypatch: pytest.MonkeyPatch) -> None:
     """Settings(mode="production") with no oidc_audience raises ValidationError."""
+    monkeypatch.delenv("OIDC_AUDIENCE", raising=False)
     with pytest.raises(ValidationError, match="oidc_audience"):
         Settings(mode="production")
 
@@ -33,8 +34,9 @@ def test_production_mode_with_oidc_audience_succeeds() -> None:
     assert settings.oidc_audience == "api"
 
 
-def test_dev_mode_does_not_require_oidc_audience() -> None:
+def test_dev_mode_does_not_require_oidc_audience(monkeypatch: pytest.MonkeyPatch) -> None:
     """Settings(mode="dev") (the default) constructs fine with no oidc_audience set."""
+    monkeypatch.delenv("OIDC_AUDIENCE", raising=False)
     assert Settings(mode="dev").oidc_audience is None
 
 

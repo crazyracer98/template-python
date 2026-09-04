@@ -1,21 +1,40 @@
 # tests/e2e/
 
 Playwright end-to-end tests — the third of `tests/`'s three suites (see
-`../README.md`), run from the devcontainer itself against the live `api`
-service, with Playwright driving Chromium remotely in the `selenium`
-stack container over CDP (see
-`.devcontainer/stack/selenium/README.md` and this directory's
+`../README.md`), run from the devcontainer itself, with Playwright
+driving Chromium remotely in the `selenium` stack container over CDP
+(see `.devcontainer/stack/selenium/README.md` and this directory's
 `conftest.py`) — not collected by a plain `pytest` run (see
 `pyproject.toml`'s pytest `addopts`, which ignores this directory by
 default; run it explicitly with `uv run pytest tests/e2e`).
 
+The whole suite runs twice per session, parametrized over the
+session-scoped `app_mode` fixture (`conftest.py`, `params=["dev",
+"mock"]`): once against the live `api` service under `MODE=dev`
+(`:8000`), once against a second `uvicorn` process under `MODE=mock`
+(`:8001`, `ALLOW_MOCK_MODE=1`) with no Postgres/Redis/S3/Keycloak
+dependency at all — `InMemoryRepository`, `MockHealthCheck`, and
+`POST /mock/token` (see `../../src/app/README.md`'s "MODE" section)
+standing in for each. The mock leg's process still needs the
+devcontainer's own Python/uv environment, but none of
+`.devcontainer/stack`'s sibling service containers — running just the
+mock leg is the one case in this repo where `tests/e2e` doesn't require
+the full stack up. `access_token` (`conftest.py`) is mode-aware too: it
+reads each dev-realm username's client roles out of
+`.devcontainer/stack/keycloak/realm-export.json` and, under `mock`,
+mints a token for them via `POST /mock/token` instead of a real
+password-grant login, so every test can call `access_token("editor")`
+unchanged regardless of mode.
+
 The session-scoped, autouse `_running_app` fixture in `conftest.py` starts
-`uvicorn` for the duration of the run and tears it down afterwards, so
-this suite doesn't require the app already running in another terminal —
-unless something already answers `{base_url}/health` (e.g. the "FastAPI:
-api" launch config), in which case it's left alone, or `E2E_BASE_URL` is
-set, in which case this suite assumes whatever it points at is managed
-elsewhere.
+`uvicorn` for each mode's app for the duration of the run and tears it
+down afterwards, so this suite doesn't require the app already running
+in another terminal — unless something already answers
+`{base_url}/health` for that mode (e.g. the "FastAPI: api" launch config
+for `dev`), in which case it's left alone, or `E2E_BASE_URL` is set, in
+which case the `dev` leg assumes whatever it points at is managed
+elsewhere (`E2E_BASE_URL` has no effect on the `mock` leg — its whole
+point is not depending on an externally-managed instance).
 
 That `uvicorn` process is a subprocess, so pytest-cov can't measure it
 directly the way it measures `../unit/` and `../integration/` importing

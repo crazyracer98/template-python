@@ -154,9 +154,9 @@ not a per-request one.
   also requires `ALLOW_MOCK_MODE=1` (`Settings.allow_mock_mode`) —
   `config.py`'s validation refuses to construct `Settings` with
   `MODE=mock` and no `ALLOW_MOCK_MODE`, so the mode can never be reached
-  by `MODE`'s own default/typo alone. Nothing in this repo sets it today
-  (no compose file/CI job runs `MODE=mock`); a future local-only use adds
-  it explicitly alongside `MODE=mock`.
+  by `MODE`'s own default/typo alone. `tests/e2e/conftest.py` sets it for
+  its own `MODE=mock` parametrized leg; a future local-only use beyond
+  that adds it explicitly alongside `MODE=mock`.
 - `production`: no debugger. The `../../Dockerfile`'s `runner` stage
   sets `ENV MODE=production` as the single source of truth for that
   default.

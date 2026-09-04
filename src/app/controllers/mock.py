@@ -6,11 +6,9 @@ exercisable without a running Keycloak. app.oidc.decode_bearer_token's own
 MODE=mock branch never verifies the signature, so the signing key here is a fixed,
 non-secret, local-only value -- never used outside MODE=mock.
 
-The route body is `# pragma: no cover` for tests/e2e specifically: e2e drives one
-live MODE=dev process (see .devcontainer/compose.yml), which never mounts this
-router at all (app.main's `_mount_mode_specific_routers`) -- there's no request
-path that could reach it there. tests/unit/controllers/test_mock.py exercises it
-directly and still counts toward its own 95% gate.
+tests/e2e/conftest.py runs one parametrized leg fully under MODE=mock, so this
+route is exercised through a real HTTP request there too, on top of
+tests/unit/controllers/test_mock.py exercising it directly in-process.
 """
 
 from typing import Any
@@ -37,7 +35,7 @@ class MockTokenRequest(BaseModel):
 
 
 @router.post("/mock/token")
-async def issue_mock_token(request: MockTokenRequest) -> dict[str, Any]:  # pragma: no cover
+async def issue_mock_token(request: MockTokenRequest) -> dict[str, Any]:
     """Issue a mock access token carrying the given subject and client roles."""
     claims = {
         "sub": request.sub,

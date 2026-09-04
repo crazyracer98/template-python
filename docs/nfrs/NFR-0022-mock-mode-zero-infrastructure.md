@@ -18,4 +18,8 @@ Developers. Documented in `src/app/README.md`; implemented across
 ## Verification
 
 Unit test suite runs entirely under `MODE=mock` (or equivalent fakes)
-with no real service dependency, per `tests/README.md`.
+with no real service dependency, per `tests/README.md`. `tests/e2e` also
+runs one full parametrized leg under `MODE=mock` (`tests/e2e/conftest.py`),
+driving a real `uvicorn` process with no Postgres/Redis/S3/Keycloak
+dependency through real HTTP -- a stronger end-to-end verification than
+the unit suite's in-process one.

@@ -13,7 +13,7 @@ def test_maintainer_has_full_hero_lifecycle_but_not_audit(
 
     create_response = page.request.post(
         f"{base_url}/heroes",
-        data={"name": "Doctor Strange", "superpower": "Mystic arts"},
+        data={"name": "Doctor Strange", "powers": ["Mystic arts"]},
         headers=headers,
     )
     assert create_response.status == 201
@@ -29,14 +29,14 @@ def test_maintainer_has_full_hero_lifecycle_but_not_audit(
 
     xml_update_response = page.request.patch(
         f"{base_url}/heroes/xml/{hero_id}",
-        data="<hero><superpower>Time manipulation</superpower></hero>",
+        data="<hero><powers>Time manipulation</powers></hero>",
         headers={**headers, "Content-Type": "application/xml"},
     )
     assert xml_update_response.ok
 
     get_response = page.request.get(f"{base_url}/heroes/{hero_id}", headers=headers)
     assert get_response.ok
-    assert get_response.json()["superpower"] == "Time manipulation"
+    assert get_response.json()["powers"] == ["Time manipulation"]
 
     delete_response = page.request.delete(f"{base_url}/heroes/{hero_id}", headers=headers)
     assert delete_response.status == 204

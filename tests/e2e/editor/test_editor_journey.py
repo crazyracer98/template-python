@@ -16,7 +16,7 @@ def test_editor_can_create_and_update_but_not_delete(
     try:
         json_create_response = page.request.post(
             f"{base_url}/heroes",
-            data={"name": "Black Widow", "superpower": "Espionage"},
+            data={"name": "Black Widow", "powers": ["Espionage"]},
             headers=headers,
         )
         assert json_create_response.status == 201
@@ -25,15 +25,15 @@ def test_editor_can_create_and_update_but_not_delete(
 
         update_response = page.request.patch(
             f"{base_url}/heroes/{json_hero_id}",
-            data={"superpower": "Master spy"},
+            data={"powers": ["Master spy"]},
             headers=headers,
         )
         assert update_response.ok
-        assert update_response.json()["superpower"] == "Master spy"
+        assert update_response.json()["powers"] == ["Master spy"]
 
         xml_create_response = page.request.post(
             f"{base_url}/heroes/xml",
-            data="<hero><name>Hawkeye</name><superpower>Marksmanship</superpower></hero>",
+            data="<hero><name>Hawkeye</name><powers>Marksmanship</powers></hero>",
             headers={**headers, "Content-Type": "application/xml"},
         )
         assert xml_create_response.status == 201
@@ -42,15 +42,15 @@ def test_editor_can_create_and_update_but_not_delete(
 
         xml_update_response = page.request.patch(
             f"{base_url}/heroes/xml/{xml_hero_id}",
-            data="<hero><superpower>Precision archery</superpower></hero>",
+            data="<hero><powers>Precision archery</powers></hero>",
             headers={**headers, "Content-Type": "application/xml"},
         )
         assert xml_update_response.ok
-        assert "<superpower>Precision archery</superpower>" in xml_update_response.text()
+        assert "<powers>Precision archery</powers>" in xml_update_response.text()
 
         form_response = page.request.post(
             f"{base_url}/heroes/form",
-            form={"name": "Quicksilver", "superpower": "Super speed"},
+            form={"name": "Quicksilver", "powers": "Super speed"},
             headers=headers,
         )
         assert form_response.ok

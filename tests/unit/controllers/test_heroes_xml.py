@@ -21,7 +21,7 @@ def test_hero_xml_crud_lifecycle(authed: None) -> None:
     try:
         create_response = client.post(
             "/heroes/xml",
-            content="<hero><name>Spider-Man</name><superpower>Wall-crawling</superpower></hero>",
+            content="<hero><name>Spider-Man</name><powers>Wall-crawling</powers></hero>",
             headers={"Content-Type": "application/xml"},
         )
         assert create_response.status_code == 201
@@ -39,11 +39,11 @@ def test_hero_xml_crud_lifecycle(authed: None) -> None:
 
         update_response = client.patch(
             f"/heroes/xml/{hero_id}",
-            content="<hero><superpower>Web-slinging</superpower></hero>",
+            content="<hero><powers>Web-slinging</powers><powers>Wall-crawling</powers></hero>",
             headers={"Content-Type": "application/xml"},
         )
         assert update_response.status_code == 200
-        assert "<superpower>Web-slinging</superpower>" in update_response.text
+        assert "<powers>Web-slinging</powers><powers>Wall-crawling</powers>" in update_response.text
 
         delete_response = client.delete(f"/heroes/xml/{hero_id}")
         assert delete_response.status_code == 204

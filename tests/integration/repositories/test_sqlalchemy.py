@@ -14,7 +14,7 @@ async def test_crud_roundtrip_against_real_postgres() -> None:
     async with async_session_factory() as session:
         repository = SQLAlchemyRepository(session, Hero)
 
-        created = await repository.create({"name": "Iron Man", "superpower": "Powered armor"})
+        created = await repository.create({"name": "Iron Man", "powers": ["Powered armor"]})
         assert created.id is not None
 
         fetched = await repository.get(created.id)
@@ -24,11 +24,11 @@ async def test_crud_roundtrip_against_real_postgres() -> None:
         heroes = await repository.list()
         assert any(hero.id == created.id for hero in heroes)
 
-        updated = await repository.update(created.id, {"superpower": "Repulsor blasts"})
+        updated = await repository.update(created.id, {"powers": ["Repulsor blasts"]})
         assert updated is not None
-        assert updated.superpower == "Repulsor blasts"
+        assert updated.powers == ["Repulsor blasts"]
 
         assert await repository.delete(created.id) is True
         assert await repository.get(created.id) is None
         assert await repository.delete(created.id) is False
-        assert await repository.update(created.id, {"superpower": "N/A"}) is None
+        assert await repository.update(created.id, {"powers": ["N/A"]}) is None

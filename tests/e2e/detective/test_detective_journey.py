@@ -18,7 +18,7 @@ def test_detective_can_cross_reference_audit_and_heroes(
 
     create_response = page.request.post(
         f"{base_url}/heroes",
-        data={"name": "Jessica Jones", "superpower": "Super strength"},
+        data={"name": "Jessica Jones", "powers": ["Super strength"]},
         headers=maintainer_headers,
     )
     assert create_response.status == 201
@@ -34,7 +34,7 @@ def test_detective_can_cross_reference_audit_and_heroes(
 
         forbidden_create_response = page.request.post(
             f"{base_url}/heroes",
-            data={"name": "Nobody", "superpower": "None"},
+            data={"name": "Nobody", "powers": ["None"]},
             headers=headers,
             fail_on_status_code=False,
         )
@@ -42,7 +42,7 @@ def test_detective_can_cross_reference_audit_and_heroes(
 
         update_response = page.request.patch(
             f"{base_url}/heroes/{hero_id}",
-            data={"superpower": "None"},
+            data={"powers": ["None"]},
             headers=headers,
             fail_on_status_code=False,
         )

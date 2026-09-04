@@ -12,11 +12,11 @@ reason as app.repositories.memory -- see its module docstring.
 """
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import boto3
 import httpx
 from botocore.exceptions import BotoCoreError, ClientError
-from mypy_boto3_s3 import S3Client
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import text
@@ -24,6 +24,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.health.base import HealthCheckResult
+
+if TYPE_CHECKING:
+    # boto3-stubs[s3] is a dev-only dependency (pyproject.toml) -- not
+    # installed in the runner image, so this can't be a runtime import.
+    # Safe as a type-only import: local variable annotations (the one use
+    # below) aren't evaluated at runtime.
+    from mypy_boto3_s3 import S3Client
 
 
 class DatabaseHealthCheck:

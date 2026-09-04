@@ -12,7 +12,7 @@ def seeded_hero_id(page: Page, base_url: str, access_token: Callable[[str], str]
     maintainer_headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     create_response = page.request.post(
         f"{base_url}/heroes",
-        data={"name": "Iron Fist", "superpower": "Chi mastery"},
+        data={"name": "Iron Fist", "powers": ["Chi mastery"]},
         headers=maintainer_headers,
     )
     assert create_response.status == 201
@@ -49,7 +49,7 @@ def test_viewer_can_read_but_not_write(
 
     create_response = page.request.post(
         f"{base_url}/heroes",
-        data={"name": "Nobody", "superpower": "None"},
+        data={"name": "Nobody", "powers": ["None"]},
         headers=headers,
         fail_on_status_code=False,
     )
@@ -57,7 +57,7 @@ def test_viewer_can_read_but_not_write(
 
     update_response = page.request.patch(
         f"{base_url}/heroes/{seeded_hero_id}",
-        data={"superpower": "None"},
+        data={"powers": ["None"]},
         headers=headers,
         fail_on_status_code=False,
     )

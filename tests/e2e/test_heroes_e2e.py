@@ -10,7 +10,7 @@ def test_hero_crud_lifecycle(page: Page, base_url: str, access_token: Callable[[
     headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     create_response = page.request.post(
         f"{base_url}/heroes",
-        data={"name": "Black Panther", "superpower": "Vibranium suit"},
+        data={"name": "Black Panther", "powers": ["Vibranium suit"]},
         headers=headers,
     )
     assert create_response.status == 201
@@ -27,11 +27,11 @@ def test_hero_crud_lifecycle(page: Page, base_url: str, access_token: Callable[[
 
         update_response = page.request.patch(
             f"{base_url}/heroes/{hero_id}",
-            data={"superpower": "Enhanced senses"},
+            data={"powers": ["Enhanced senses"]},
             headers=headers,
         )
         assert update_response.ok
-        assert update_response.json()["superpower"] == "Enhanced senses"
+        assert update_response.json()["powers"] == ["Enhanced senses"]
     finally:
         delete_response = page.request.delete(f"{base_url}/heroes/{hero_id}", headers=headers)
         assert delete_response.status == 204
@@ -58,7 +58,7 @@ def test_hero_crud_lifecycle(page: Page, base_url: str, access_token: Callable[[
 def test_create_hero_with_missing_field_returns_422(
     page: Page, base_url: str, access_token: Callable[[str], str]
 ) -> None:
-    """POST /heroes without the required superpower field returns a validation problem."""
+    """POST /heroes without the required powers field returns a validation problem."""
     response = page.request.post(
         f"{base_url}/heroes",
         data={"name": "Nobody"},

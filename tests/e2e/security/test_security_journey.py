@@ -32,7 +32,7 @@ def test_security_has_audit_access_but_no_hero_access(
 
     create_response = page.request.post(
         f"{base_url}/heroes",
-        data={"name": "Nobody", "superpower": "None"},
+        data={"name": "Nobody", "powers": ["None"]},
         headers=headers,
         fail_on_status_code=False,
     )

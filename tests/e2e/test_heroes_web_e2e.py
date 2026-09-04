@@ -17,7 +17,7 @@ def test_hero_form_serves_html_and_accepts_a_submission(
 
     submit_response = page.request.post(
         f"{base_url}/heroes/form",
-        form={"name": "Storm", "superpower": "Weather control"},
+        form={"name": "Storm", "powers": "Weather control, Flight"},
         headers=headers,
     )
     assert submit_response.ok  # Playwright follows the 303 redirect by default

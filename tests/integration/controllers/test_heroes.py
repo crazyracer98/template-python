@@ -31,7 +31,7 @@ def _authed() -> Iterator[None]:
 def test_hero_crud_lifecycle_against_real_postgres() -> None:
     """Create, list, get, update, and delete a hero through the live app and real DB."""
     create_response = client.post(
-        "/heroes", json={"name": "Wonder Woman", "superpower": "Super strength"}
+        "/heroes", json={"name": "Wonder Woman", "powers": ["Super strength"]}
     )
     assert create_response.status_code == 201
     hero_id = create_response.json()["id"]
@@ -45,9 +45,9 @@ def test_hero_crud_lifecycle_against_real_postgres() -> None:
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Wonder Woman"
 
-        update_response = client.patch(f"/heroes/{hero_id}", json={"superpower": "Lasso of truth"})
+        update_response = client.patch(f"/heroes/{hero_id}", json={"powers": ["Lasso of truth"]})
         assert update_response.status_code == 200
-        assert update_response.json()["superpower"] == "Lasso of truth"
+        assert update_response.json()["powers"] == ["Lasso of truth"]
     finally:
         delete_response = client.delete(f"/heroes/{hero_id}")
         assert delete_response.status_code == 204

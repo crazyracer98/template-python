@@ -15,7 +15,7 @@ def test_hero_xml_crud_lifecycle(
     }
     create_response = page.request.post(
         f"{base_url}/heroes/xml",
-        data="<hero><name>Storm</name><superpower>Weather control</superpower></hero>",
+        data="<hero><name>Storm</name><powers>Weather control</powers></hero>",
         headers=headers,
     )
     assert create_response.status == 201
@@ -33,11 +33,11 @@ def test_hero_xml_crud_lifecycle(
 
         update_response = page.request.patch(
             f"{base_url}/heroes/xml/{hero_id}",
-            data="<hero><superpower>Lightning storms</superpower></hero>",
+            data="<hero><powers>Lightning storms</powers></hero>",
             headers=headers,
         )
         assert update_response.ok
-        assert "<superpower>Lightning storms</superpower>" in update_response.text()
+        assert "<powers>Lightning storms</powers>" in update_response.text()
     finally:
         delete_response = page.request.delete(f"{base_url}/heroes/xml/{hero_id}", headers=headers)
         assert delete_response.status == 204

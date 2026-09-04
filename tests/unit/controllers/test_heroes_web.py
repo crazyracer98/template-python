@@ -30,7 +30,7 @@ def test_submit_hero_form_creates_a_hero_and_redirects(authed: None) -> None:
     try:
         response = client.post(
             "/heroes/form",
-            data={"name": "Batman", "superpower": "Detective skills"},
+            data={"name": "Batman", "powers": "Detective skills, Martial arts"},
             follow_redirects=False,
         )
         assert response.status_code == 303

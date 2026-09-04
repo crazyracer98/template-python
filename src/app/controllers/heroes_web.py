@@ -17,7 +17,8 @@ from app.web_components import render_crud_component_js, render_crud_form
 
 router = APIRouter(prefix="/heroes", tags=["heroes"])
 
-_FIELDS = ("name", "superpower")
+_FIELDS = ("name", "powers")
+_LIST_FIELDS = ("powers",)
 
 
 @router.get("/form", dependencies=[ReadRoles])
@@ -33,10 +34,14 @@ async def hero_form() -> Response:
 async def submit_hero_form(
     crud: HeroCRUD,
     name: Annotated[str, Form()],
-    superpower: Annotated[str, Form()],
+    powers: Annotated[str, Form()],
 ) -> RedirectResponse:
     """Create a hero from a plain HTML form submission and redirect back to the form."""
-    await crud.create(HeroCreate(name=name, superpower=superpower))
+    await crud.create(
+        HeroCreate(
+            name=name, powers=[power.strip() for power in powers.split(",") if power.strip()]
+        )
+    )
     return RedirectResponse("/heroes/form", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -44,6 +49,6 @@ async def submit_hero_form(
 async def hero_components_js() -> Response:
     """Serve the vanilla-JS custom elements for the Hero resource."""
     return Response(
-        content=render_crud_component_js("hero", "/heroes", _FIELDS),
+        content=render_crud_component_js("hero", "/heroes", _FIELDS, list_fields=_LIST_FIELDS),
         media_type="application/javascript",
     )

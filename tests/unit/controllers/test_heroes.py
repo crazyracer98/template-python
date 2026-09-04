@@ -28,7 +28,7 @@ def test_hero_crud_lifecycle(authed: None) -> None:
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(repository)
     try:
         create_response = client.post(
-            "/heroes", json={"name": "Spider-Man", "superpower": "Wall-crawling"}
+            "/heroes", json={"name": "Spider-Man", "powers": ["Wall-crawling"]}
         )
         assert create_response.status_code == 201
         hero_id = create_response.json()["id"]
@@ -41,9 +41,9 @@ def test_hero_crud_lifecycle(authed: None) -> None:
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Spider-Man"
 
-        update_response = client.patch(f"/heroes/{hero_id}", json={"superpower": "Web-slinging"})
+        update_response = client.patch(f"/heroes/{hero_id}", json={"powers": ["Web-slinging"]})
         assert update_response.status_code == 200
-        assert update_response.json()["superpower"] == "Web-slinging"
+        assert update_response.json()["powers"] == ["Web-slinging"]
 
         delete_response = client.delete(f"/heroes/{hero_id}")
         assert delete_response.status_code == 204
@@ -98,7 +98,7 @@ def test_hero_create_requires_write_role() -> None:
         "resource_access": {settings.oidc_client_id: {"roles": ["viewer"]}},
     }
     try:
-        response = client.post("/heroes", json={"name": "X", "superpower": "Y"})
+        response = client.post("/heroes", json={"name": "X", "powers": ["Y"]})
     finally:
         del app.dependency_overrides[get_current_claims]
     assert response.status_code == 403

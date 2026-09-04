@@ -9,6 +9,14 @@ AI-assisted coding workflow (`CLAUDE.md` at the repo root covers that).
   the reasoning behind them. See `adrs/README.md`.
 - `plans/` — working plans for in-progress or upcoming work. See
   `plans/README.md`.
+- `frs/` — functional requirements: what the system must do. See
+  `frs/README.md`.
+- `nfrs/` — non-functional requirements: quality attributes the system
+  must meet. See `nfrs/README.md`.
+- `stakeholders.md` — the stakeholder register: who has a stake in the
+  app, their interest, and their influence.
+- `glossary.md` — domain terminology, so a requirement or ADR can use a
+  term precisely instead of redefining it inline.
 
 Otherwise empty for now; add pages here as the app grows.
 

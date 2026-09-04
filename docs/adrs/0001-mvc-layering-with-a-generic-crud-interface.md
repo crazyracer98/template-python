@@ -42,10 +42,31 @@ and a controller that builds `CRUDInterface(schema=View,
 repository=SQLAlchemyRepository(session, Model))` per request — see
 `src/app/README.md`'s "Example CRUD resource: Hero".
 
+```mermaid
+graph TD
+    Controller["controllers/ (FastAPI router)"] --> CRUD["crud/ (CRUDInterface)"]
+    CRUD --> View["views/ (Pydantic, ORMView)"]
+    CRUD --> Repository["repositories/ (Repository protocol)"]
+    Repository --> Model["models/ (SQLAlchemy)"]
+    Repository -->|SQLAlchemyRepository| DB[(Postgres)]
+    Controller -.->|Depends| HealthReg["health/ (HealthRegistry)"]
+    HealthReg --> Postgres[(Postgres)]
+    HealthReg --> Redis[(Redis)]
+    HealthReg --> S3[(S3)]
+    HealthReg --> OIDCProvider[(OIDC provider)]
+```
+
 We will enforce a strict, one-directional import order between these
 layers (`config` → `oidc` → `models` → `views` → `repositories` →
 `crud` → `health` → `controllers` → `main`) with `import-linter`'s
-`layers` contract, run in CI alongside `ruff`/`mypy`. This is what keeps
+`layers` contract, run in CI alongside `ruff`/`mypy`.
+
+```mermaid
+graph LR
+    config --> oidc --> models --> views --> repositories --> crud --> health --> controllers --> main
+```
+
+This is what keeps
 `crud/base.py` and `repositories/sqlalchemy.py` genuinely generic: a
 lower layer that could import a higher one would eventually grow a
 resource-specific special case, and the contract fails the build before

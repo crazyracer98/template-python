@@ -45,6 +45,17 @@ manual/pre-push stage, same as mypy). A new subpackage or flat module
 gets added to that `layers` list at the point matching its real
 dependencies, not appended blindly to one end.
 
+```mermaid
+graph LR
+    config --> telemetry --> problem_details --> oidc --> models
+    models --> views --> repositories --> crud --> health
+    health --> web_components --> xml_codec --> http_headers
+    http_headers --> controllers --> main
+```
+
+An arrow means "may import from" — each module may depend on anything
+to its left, never anything to its right.
+
 ## Configuration
 
 No application `.env` file: `config.py` reads settings from the process
@@ -187,6 +198,28 @@ variants) in `views/`, and a router in `controllers/` that builds a
 `CRUDInterface(schema=<View>, repository=SQLAlchemyRepository(session,
 <Model>))` per request — see `crud/README.md` and
 `repositories/README.md` for what each side of that call does.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Controller as controllers/heroes.py
+    participant CRUD as crud/base.py (CRUDInterface)
+    participant Repo as repositories/sqlalchemy.py
+    participant DB as Postgres
+
+    Client->>Controller: GET /v2/heroes/{id}
+    Controller->>CRUD: get(id)
+    CRUD->>Repo: get(id)
+    Repo->>DB: SELECT ... WHERE id = ?
+    DB-->>Repo: row
+    Repo-->>CRUD: ORM model
+    CRUD-->>Controller: View (from_attributes)
+    Controller-->>Client: 200 JSON
+```
+
+Under `MODE=mock`, `Repo`/`DB` are replaced by
+`repositories/memory.py`'s `InMemoryRepository`, with no other layer
+changing — see "MODE (dev / mock / production)" above.
 
 Hero also carries a deprecated `/v1/heroes` sibling version, backed by
 the same data — see `controllers/README.md`'s "API and model

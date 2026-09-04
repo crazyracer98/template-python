@@ -65,6 +65,25 @@ a router-level dependency, so every route under it advertises
 the current version's path -- one declaration per deprecated version,
 not one per route.
 
+```mermaid
+graph TD
+    subgraph "/v1/heroes* (deprecated)"
+        V1Views["views/hero_v1.py\n(superpower: str)"]
+        CompatCRUD["crud/compat.py\nCompatCRUD"]
+    end
+    subgraph "/v2/heroes* (current)"
+        V2Views["views/hero.py\n(powers: list[str])"]
+        CRUDInterface["crud/base.py\nCRUDInterface"]
+    end
+    V1Views -->|hero_to_v1 / hero_v1_*_to_v2| V2Views
+    CompatCRUD --> CRUDInterface
+    CRUDInterface --> Repo[repositories/sqlalchemy.py]
+    Repo --> Model["models/hero.py\n(current shape only)"]
+```
+
+There is exactly one persisted shape (`models/hero.py`); every API
+version is a `views`/`crud` adapter on top of it, never a second table.
+
 ## Consequences
 
 Adding a resource's first deprecated version is now a views module

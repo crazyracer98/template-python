@@ -29,6 +29,22 @@ repo's Keycloak realm already configures `api` as a public client for
 exactly this), then attach that token as `Bearer` to whichever backend it
 calls.
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant IdP as OIDC provider (Keycloak)
+    participant Backend as Backend (any region)
+
+    User->>Frontend: interact
+    Frontend->>IdP: Authorization Code + PKCE flow
+    IdP-->>Frontend: bearer token (JWT)
+    Frontend->>Backend: request + Authorization: Bearer <token>
+    Backend->>Backend: validate signature (JWKS, cached)\nissuer / audience / expiry
+    Backend->>Backend: require_roles(...) checks resource_access claim
+    Backend-->>Frontend: 200 / 401 / 403
+```
+
 This already generalizes to a federated multi-region backend without any
 change to `oidc.py`, because token validation is stateless and local:
 each backend fetches/caches the issuer's JWKS itself and checks
@@ -51,6 +67,22 @@ Either way, `oidc.py`'s pattern — validate issuer + audience + JWKS
 locally, enforce roles per-route via `require_roles` — stays
 byte-for-byte identical in every region; only the `OIDC_ISSUER_URL`
 setting differs per deployment.
+
+```mermaid
+graph TD
+    subgraph "Per-region IdP realms (federated/brokered)"
+        IdPUS[IdP: US realm]
+        IdPEU[IdP: EU realm]
+        IdPUS <-.brokered.-> IdPEU
+    end
+    BackendUS["Backend (US region)\nOIDC_ISSUER_URL=US"] --> IdPUS
+    BackendEU["Backend (EU region)\nOIDC_ISSUER_URL=EU"] --> IdPEU
+    Frontend --> BackendUS
+    Frontend --> BackendEU
+```
+
+No request ever hops through a central auth service — each backend
+validates independently against its own configured issuer.
 
 ## Consequences
 

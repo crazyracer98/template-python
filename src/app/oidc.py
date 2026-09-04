@@ -6,8 +6,14 @@ Everything that needs the network -- fetching the provider's OIDC discovery
 document and JWKS -- is deferred behind an lru_cache-wrapped function, so
 importing this module (and therefore app.main, and therefore every unit test
 using TestClient) never requires a running OIDC provider.
+
+Also require_roles, a Keycloak-shaped RBAC dependency (reads the
+resource_access.<client>.roles claim Keycloak's client-role mapper populates --
+see app.controllers.heroes/audit for routes that use it, and
+app.controllers.mock for how MODE=mock issues tokens carrying that same shape).
 """
 
+from collections.abc import Awaitable, Callable
 from functools import lru_cache
 from typing import Annotated, Any
 
@@ -38,8 +44,18 @@ def _get_jwks_client() -> PyJWKClient:
 
 
 def decode_bearer_token(token: str) -> dict[str, Any]:
-    """Verify a bearer token's signature and standard claims, and return its payload."""
+    """Verify a bearer token's signature and standard claims, and return its payload.
+
+    MODE=mock skips JWKS/network entirely and trusts whatever claims the token
+    carries (see app.controllers.mock's POST /mock/token) -- a mock/test-only path,
+    never used when MODE is dev or production. `# pragma: no cover` below is for
+    tests/e2e specifically: it drives one live MODE=dev process, which can never
+    take this branch -- tests/unit/test_oidc.py exercises it directly and still
+    counts toward its own 95% gate.
+    """
     try:
+        if settings.mode == "mock":  # pragma: no cover
+            return jwt.decode(token, options={"verify_signature": False})
         signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
         return jwt.decode(
             token,
@@ -60,3 +76,24 @@ def decode_bearer_token(token: str) -> dict[str, Any]:
 async def get_current_claims(token: Annotated[str, Depends(oauth2_scheme)]) -> dict[str, Any]:
     """FastAPI dependency: validate the request's bearer token and return its claims."""
     return decode_bearer_token(token)
+
+
+def require_roles(*roles: str) -> Callable[..., Awaitable[dict[str, Any]]]:
+    """Build a dependency requiring at least one of the given Keycloak client roles.
+
+    Reads claims["resource_access"][oidc_client_id]["roles"] -- the client-role claim
+    shape Keycloak's default "roles" client scope populates (see realm-export.json),
+    not a claim assumed to exist on every provider's tokens (see app/README.md).
+    """
+
+    async def _dependency(
+        claims: Annotated[dict[str, Any], Depends(get_current_claims)],
+    ) -> dict[str, Any]:
+        granted = set(
+            claims.get("resource_access", {}).get(settings.oidc_client_id, {}).get("roles", [])
+        )
+        if not granted.intersection(roles):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
+        return claims
+
+    return _dependency

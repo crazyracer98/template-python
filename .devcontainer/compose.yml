@@ -51,11 +51,15 @@ services:
         condition: service_healthy
     environment:
       # Fixed in-network hostnames/ports, not credentials, so they're
-      # literal here rather than pulled from a stack env file.
+      # literal here rather than pulled from a stack env file. MODE is a
+      # behavior toggle, not a credential either -- see src/app/config.py
+      # and CLAUDE.md's "MODE" notes; the devcontainer always runs dev
+      # (debugger enabled) unless overridden.
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       S3_ENDPOINT_URL: http://s3:9000
       REDIS_URL: redis://redis:6379/0
+      MODE: dev
     # No ports: mapping and no networks: block — see the root README's
     # "Don't". Host access to :8000 comes from devcontainer.json's
     # forwardPorts, and api reaches every stack service by name on

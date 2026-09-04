@@ -109,7 +109,8 @@ ENV PYTHONUNBUFFERED=1 \
     SSL_CERT_FILE=${SSL_CERT_FILE} \
     SSL_CERT_DIR=${SSL_CERT_DIR} \
     REQUESTS_CA_BUNDLE=${SSL_CERT_FILE} \
-    CURL_CA_BUNDLE=${SSL_CERT_FILE}
+    CURL_CA_BUNDLE=${SSL_CERT_FILE} \
+    MODE=production
 
 COPY scripts/runner.sh /usr/local/bin/runner.sh
 # Group 0, not the numeric owner, is what an arbitrary UID actually gets

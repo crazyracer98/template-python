@@ -15,11 +15,15 @@
       "version": "24.20.0"
     }
   },
-  "forwardPorts": [8000, "keycloak:8080"],
+  "forwardPorts": [8000, 5678, "keycloak:8080"],
   "portsAttributes": {
     "8000": {
       "label": "FastAPI (api)",
       "onAutoForward": "openPreview"
+    },
+    "5678": {
+      "label": "debugpy",
+      "onAutoForward": "ignore"
     },
     "keycloak:8080": {
       "label": "Keycloak",

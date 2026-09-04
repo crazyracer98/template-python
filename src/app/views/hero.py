@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from app.views.base import ORMView
+from app.views.base import IXDTFDatetime, ORMView
 
 
 class HeroBase(ORMView):
@@ -27,3 +27,5 @@ class Hero(HeroBase):
     """A Hero as returned by the API, including its assigned id."""
 
     id: int
+    created_at: IXDTFDatetime
+    updated_at: IXDTFDatetime

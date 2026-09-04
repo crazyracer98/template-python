@@ -1,9 +1,12 @@
 """Application settings, sourced entirely from the process environment."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+Mode = Literal["dev", "mock", "production"]
 
 
 class Settings(BaseSettings):
@@ -20,6 +23,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     app_name: str = "template-fastapi"
+
+    # dev: debugger enabled (see app.main). mock: every external service
+    # (Postgres, Redis, S3, OIDC) is replaced with a local/in-memory fake --
+    # see app.controllers.heroes, app.health.registry, app.oidc. production:
+    # debugger disabled. Defaults to "dev" to match this template's other
+    # defaults (localhost hosts, etc.), which assume local/devcontainer use
+    # unless overridden -- see the Dockerfile's runner stage for the
+    # production default.
+    mode: Mode = "dev"
 
     postgres_user: str = "app"
     postgres_password: str = "app"  # noqa: S105 -- local Postgres default, not a real secret

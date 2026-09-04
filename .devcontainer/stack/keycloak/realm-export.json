@@ -12,10 +12,40 @@
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "redirectUris": ["*"],
-      "webOrigins": ["*"]
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ]
     }
   ],
+  "roles": {
+    "client": {
+      "api": [
+        {
+          "name": "viewer",
+          "description": "Read-only access to Hero routes"
+        },
+        {
+          "name": "editor",
+          "description": "Read/create/update access to Hero routes"
+        },
+        {
+          "name": "maintainer",
+          "description": "Full CRUD access to Hero routes, including delete"
+        },
+        {
+          "name": "security",
+          "description": "Access to /audit"
+        },
+        {
+          "name": "detective",
+          "description": "Read-only access to Hero routes, plus /audit"
+        }
+      ]
+    }
+  },
   "users": [
     {
       "username": "viewer",
@@ -31,7 +61,15 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["offline_access", "uma_authorization"]
+      "realmRoles": [
+        "offline_access",
+        "uma_authorization"
+      ],
+      "clientRoles": {
+        "api": [
+          "viewer"
+        ]
+      }
     },
     {
       "username": "editor",
@@ -47,7 +85,15 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["offline_access", "uma_authorization"]
+      "realmRoles": [
+        "offline_access",
+        "uma_authorization"
+      ],
+      "clientRoles": {
+        "api": [
+          "editor"
+        ]
+      }
     },
     {
       "username": "security",
@@ -63,7 +109,15 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["offline_access", "uma_authorization"]
+      "realmRoles": [
+        "offline_access",
+        "uma_authorization"
+      ],
+      "clientRoles": {
+        "api": [
+          "security"
+        ]
+      }
     },
     {
       "username": "maintainer",
@@ -79,7 +133,15 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["offline_access", "uma_authorization"]
+      "realmRoles": [
+        "offline_access",
+        "uma_authorization"
+      ],
+      "clientRoles": {
+        "api": [
+          "maintainer"
+        ]
+      }
     },
     {
       "username": "detective",
@@ -95,7 +157,15 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["offline_access", "uma_authorization"]
+      "realmRoles": [
+        "offline_access",
+        "uma_authorization"
+      ],
+      "clientRoles": {
+        "api": [
+          "detective"
+        ]
+      }
     }
   ]
 }

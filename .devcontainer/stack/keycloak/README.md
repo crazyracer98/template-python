@@ -15,7 +15,11 @@ exist immediately — no manual admin-console setup required.
 - Admin console user / password: `admin` / `admin`
 - Test users / password (same as username): `viewer`, `editor`, `security`,
   `maintainer`, `detective` — all with the same `offline_access` /
-  `uma_authorization` realm roles; see `realm-export.json` for names/emails
+  `uma_authorization` realm roles, plus one `api` client role each
+  matching their username (`clientRoles` in `realm-export.json`) — see
+  the root `CLAUDE.md`'s "RBAC (Keycloak client roles)" section for what
+  each role grants and `src/app/oidc.py`'s `require_roles` for how routes
+  enforce it.
 - Issuer URL (from other containers): `http://keycloak:8080/realms/template-fastapi`
 - Admin credentials and the `OIDC_*` URLs: defined in `keycloak.env`, next to this file
 

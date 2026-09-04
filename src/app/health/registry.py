@@ -5,7 +5,13 @@ from functools import lru_cache
 
 from app.config import get_settings
 from app.health.base import HealthCheck, HealthCheckResult
-from app.health.checks import DatabaseHealthCheck, OIDCHealthCheck, RedisHealthCheck, S3HealthCheck
+from app.health.checks import (
+    DatabaseHealthCheck,
+    MockHealthCheck,
+    OIDCHealthCheck,
+    RedisHealthCheck,
+    S3HealthCheck,
+)
 from app.models.base import engine
 
 
@@ -27,9 +33,19 @@ class HealthRegistry:
 
 @lru_cache
 def get_health_registry() -> HealthRegistry:
-    """Return the process-wide cached HealthRegistry, with every external service registered."""
+    """Return the process-wide cached HealthRegistry, with every external service registered.
+
+    MODE=mock registers MockHealthCheck for every service instead of the real checks --
+    there's nothing real to reach (see app.repositories.memory, app.oidc's mock decode path).
+    """
     settings = get_settings()
     registry = HealthRegistry()
+    if settings.mode == "mock":
+        registry.register(MockHealthCheck("database"))
+        registry.register(MockHealthCheck("redis"))
+        registry.register(MockHealthCheck("s3"))
+        registry.register(MockHealthCheck("oidc"))
+        return registry
     registry.register(DatabaseHealthCheck(engine))
     registry.register(RedisHealthCheck(settings.redis_url))
     registry.register(

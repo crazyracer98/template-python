@@ -1,10 +1,31 @@
 """Integration test: /heroes CRUD routes against the real Postgres stack service."""
 
+from collections.abc import Iterator
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.main import app
+from app.oidc import get_current_claims
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _authed() -> Iterator[None]:
+    """Grant every RBAC role for the duration of each test in this module."""
+    settings = get_settings()
+    app.dependency_overrides[get_current_claims] = lambda: {
+        "sub": "test-user",
+        "resource_access": {
+            settings.oidc_client_id: {
+                "roles": ["viewer", "editor", "maintainer", "security", "detective"]
+            }
+        },
+    }
+    yield
+    del app.dependency_overrides[get_current_claims]
 
 
 def test_hero_crud_lifecycle_against_real_postgres() -> None:

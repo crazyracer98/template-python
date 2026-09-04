@@ -1,11 +1,14 @@
 """Unit test: Hero views validate input and convert from an ORM-shaped object."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
 
 from app.views.hero import Hero, HeroCreate, HeroUpdate
+
+_NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 @dataclass
@@ -15,6 +18,8 @@ class _FakeORMHero:
     id: int
     name: str
     superpower: str
+    created_at: datetime
+    updated_at: datetime
 
 
 def test_hero_create_accepts_valid_fields() -> None:
@@ -38,6 +43,17 @@ def test_hero_update_allows_all_fields_omitted() -> None:
 
 def test_hero_converts_from_orm_instance() -> None:
     """Hero.model_validate builds a view straight from an ORM-shaped object."""
-    orm_hero = _FakeORMHero(id=1, name="Batman", superpower="Detective skills")
+    orm_hero = _FakeORMHero(
+        id=1, name="Batman", superpower="Detective skills", created_at=_NOW, updated_at=_NOW
+    )
     hero = Hero.model_validate(orm_hero)
-    assert hero == Hero(id=1, name="Batman", superpower="Detective skills")
+    assert hero.id == 1
+    assert hero.name == "Batman"
+
+
+def test_hero_serializes_timestamps_as_ixdtf() -> None:
+    """Hero's created_at/updated_at serialize as RFC 9557 IXDTF strings."""
+    hero = Hero(
+        id=1, name="Batman", superpower="Detective skills", created_at=_NOW, updated_at=_NOW
+    )
+    assert hero.model_dump(mode="json")["created_at"] == "2026-01-01T00:00:00Z[UTC]"

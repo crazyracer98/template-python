@@ -6,10 +6,15 @@ to, parameterized by a model type rather than one class per resource.
 - `base.py` — `Repository[ModelT]`, the `Protocol` `app.crud.base.
   CRUDInterface` is written against: `get`/`list`/`create`/`update`/
   `delete`, all storage-agnostic.
-- `sqlalchemy.py` — `SQLAlchemyRepository[ModelT]`, the (currently only)
-  concrete implementation: bound to an `AsyncSession` and an
-  `app.models.base.IdentifiedBase` subclass in its constructor, not
-  hardcoded to one resource.
+- `sqlalchemy.py` — `SQLAlchemyRepository[ModelT]`, the default concrete
+  implementation: bound to an `AsyncSession` and an `app.models.base.
+  IdentifiedBase` subclass in its constructor, not hardcoded to one
+  resource.
+- `memory.py` — `InMemoryRepository[ModelT]`, a dict-backed implementation
+  used when `MODE=mock` (see `app.controllers.heroes.get_hero_crud`) so the
+  app needs no database to boot. Matches `sqlalchemy.py`'s shape, but also
+  sets `created_at`/`updated_at` itself since there's no server to supply
+  them via `server_default`/`onupdate`.
 
 ## Do
 

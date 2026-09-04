@@ -1,4 +1,15 @@
-"""Concrete health checks for this app's external services: Postgres, Redis, S3, OIDC."""
+"""Concrete health checks for this app's external services: Postgres, Redis, S3, OIDC.
+
+Also MockHealthCheck, a network-free always-healthy stand-in used when MODE=mock.
+
+Each check's failure branch is `# pragma: no cover` for tests/e2e specifically:
+proving it requires actually breaking the live shared Postgres/Redis/S3/Keycloak
+that e2e (and other engineers' sessions) depend on, which isn't a trade worth
+making for a smoke-test suite -- tests/unit/health/test_checks.py fakes each
+client to exercise every failure branch instead, and still counts toward its own
+95% gate. MockHealthCheck is excluded from that same run for the same MODE-only
+reason as app.repositories.memory -- see its module docstring.
+"""
 
 import asyncio
 
@@ -29,7 +40,7 @@ class DatabaseHealthCheck:
         try:
             async with self._engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
-        except SQLAlchemyError as exc:
+        except SQLAlchemyError as exc:  # pragma: no cover -- see module docstring
             return HealthCheckResult(self.name, healthy=False, detail=str(exc))
         return HealthCheckResult(self.name, healthy=True)
 
@@ -48,7 +59,7 @@ class RedisHealthCheck:
         client = Redis.from_url(self._redis_url)
         try:
             await client.ping()
-        except RedisError as exc:
+        except RedisError as exc:  # pragma: no cover -- see module docstring
             return HealthCheckResult(self.name, healthy=False, detail=str(exc))
         finally:
             await client.aclose()
@@ -79,9 +90,21 @@ class S3HealthCheck:
         """Call ListBuckets in a thread and report whether it succeeded."""
         try:
             await asyncio.to_thread(self._list_buckets)
-        except (BotoCoreError, ClientError) as exc:
+        except (BotoCoreError, ClientError) as exc:  # pragma: no cover -- see module docstring
             return HealthCheckResult(self.name, healthy=False, detail=str(exc))
         return HealthCheckResult(self.name, healthy=True)
+
+
+class MockHealthCheck:  # pragma: no cover -- see module docstring
+    """Always-healthy check for MODE=mock, standing in for a real external service."""
+
+    def __init__(self, name: str) -> None:
+        """Bind this check to the name of the service it stands in for."""
+        self.name = name
+
+    async def check(self) -> HealthCheckResult:
+        """Report healthy without touching the network."""
+        return HealthCheckResult(self.name, healthy=True, detail="mocked")
 
 
 class OIDCHealthCheck:
@@ -100,6 +123,6 @@ class OIDCHealthCheck:
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(discovery_url)
                 response.raise_for_status()
-        except httpx.HTTPError as exc:
+        except httpx.HTTPError as exc:  # pragma: no cover -- see module docstring
             return HealthCheckResult(self.name, healthy=False, detail=str(exc))
         return HealthCheckResult(self.name, healthy=True)

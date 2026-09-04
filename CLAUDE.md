@@ -231,20 +231,27 @@ for the concrete case this affects.
 
 `src/app/` follows an MVC-ish split, each in its own subpackage:
 `models/` (SQLAlchemy ORM), `views/` (Pydantic schemas), `repositories/`
-(storage-agnostic CRUD access, with a generic SQLAlchemy implementation),
+(storage-agnostic CRUD access, with a generic SQLAlchemy implementation
+and a generic in-memory one for `MODE=mock` — see "MODE" below),
 `crud/` (a generic CRUD interface built from a view + a repository, so a
 new resource never needs its own CRUD class), `health/` (a registry of
 checks against external services), and `controllers/` (FastAPI routers).
-`config.py`/`main.py`/`oidc.py` stay flat, outside any subpackage.
+`config.py`/`main.py`/`oidc.py`/`telemetry.py`/`problem_details.py`/
+`http_headers.py`/`xml_codec.py`/`web_components.py` stay flat, outside
+any subpackage — a flat module has no resource-specific code and no
+state of its own beyond what it's explicitly passed or reads from
+`app.config`.
 
 Import order between these is strict and one-directional — lower layers
-never import from higher ones (`config` → `oidc` → `models` → `views` →
-`repositories` → `crud` → `health` → `controllers` → `main`) — enforced
-by `import-linter`'s `layers` contract in `pyproject.toml`'s
-`[tool.importlinter]`, run via `uv run lint-imports` (wired into
-`.pre-commit-config.yaml`'s manual/pre-push stage, same as mypy). A new
-subpackage gets added to that `layers` list at the point matching its
-real dependencies, not appended blindly to one end.
+never import from higher ones (`config` → `telemetry` → `problem_details`
+→ `oidc` → `models` → `views` → `repositories` → `crud` → `health` →
+`web_components` → `xml_codec` → `http_headers` → `controllers` →
+`main`) — enforced by `import-linter`'s `layers` contract in
+`pyproject.toml`'s `[tool.importlinter]`, run via `uv run lint-imports`
+(wired into `.pre-commit-config.yaml`'s manual/pre-push stage, same as
+mypy). A new subpackage or flat module gets added to that `layers` list
+at the point matching its real dependencies, not appended blindly to one
+end.
 
 ## Alembic migrations
 
@@ -290,6 +297,106 @@ bearer tokens against it via generic OIDC discovery + JWKS
 auth to a route with `Depends(get_current_claims)`; routes
 that don't take that dependency stay public. See `src/app/README.md` for
 the route-level convention.
+
+### RBAC (Keycloak client roles)
+
+Each test user carries one client role on the `api` client
+(`realm-export.json`'s `clients[].roles` + each user's `clientRoles`),
+matching that user's name (`viewer`/`editor`/`maintainer`/`security`/
+`detective`). `src/app/oidc.py`'s `require_roles(*roles)` builds a
+dependency reading `claims["resource_access"][oidc_client_id]["roles"]`
+— Keycloak's client-role claim shape specifically, not something assumed
+present on every provider's token (unlike `get_current_claims`, which
+stays provider-agnostic). Add a role requirement to a route with
+`dependencies=[Depends(require_roles("editor", "maintainer"))]` (or a
+module-level `Depends(...)` constant reused across a router's routes —
+see `src/app/controllers/heroes.py`'s `ReadRoles`/`WriteRoles`/
+`DeleteRoles`). A new resource's routes pick their own role names/
+mapping; there's no fixed role list beyond what `realm-export.json`
+defines.
+
+## MODE (dev / mock / production)
+
+`src/app/config.py`'s `Settings.mode` (env var `MODE`) is `"dev"`,
+`"mock"`, or `"production"`, read once at import time everywhere it's
+used (the same pattern as `get_settings()` generally — see "Configuration"
+below) — it's a startup-time setting, not a per-request one.
+
+- `dev` (the default): `app.main` starts `debugpy` listening on `:5678`
+  for a remote attach (non-blocking — never `wait_for_client()`) and sets
+  FastAPI's `debug=True`. `.devcontainer/compose.yml` sets `MODE: dev`.
+- `mock`: every external service is replaced with a local fake, so the
+  app needs zero containers to boot — `app.repositories.memory.
+  InMemoryRepository` instead of `SQLAlchemyRepository` (Alembic
+  migrations are skipped entirely), `app.health.checks.MockHealthCheck`
+  instead of the real per-service checks, and `app.oidc.
+  decode_bearer_token` skips JWKS/network and trusts the token's claims
+  as-is. `POST /mock/token` (`app.controllers.mock`, mounted only in this
+  mode) issues a token shaped like a real Keycloak one (same
+  `resource_access.<client>.roles` claim), so RBAC is exercisable without
+  Keycloak too.
+- `production`: no debugger. The `Dockerfile`'s `runner` stage sets
+  `ENV MODE=production` as the single source of truth for that default.
+
+A resource that wants `MODE=mock` support adds its own
+`InMemoryRepository`-backed branch the way `app.controllers.heroes.
+get_hero_crud` does — keep the dependency's signature identical across
+modes (an unused `AsyncSession`'s `commit()` never opens a connection, so
+depending on `get_db` unconditionally and branching on `settings.mode`
+inside the function body is both simpler and satisfies mypy's
+identical-conditional-signature check, versus two differently-signatured
+functions).
+
+## Structured logging / OTEL
+
+`src/app/telemetry.py`'s `configure_logging()` (called once from
+`app.main`, at import time) attaches a JSON-formatting handler to the
+root logger unconditionally — every log call (including uvicorn's own)
+prints one structured JSON line to stdout. If `OTEL_EXPORTER_OTLP_ENDPOINT`
+is set, it additionally bridges the root logger to an OTLP log exporter.
+Logs only, deliberately — no tracing/metrics instrumentation. OTEL's own
+env vars (endpoint, headers, protocol, compression, certificate) are read
+directly by `OTLPLogExporter()` itself, never re-modeled as `Settings`
+fields — OTEL's env-var convention is already the single source of truth
+for those.
+
+## RFC 9457 error responses
+
+`src/app/problem_details.py`'s `register_problem_handlers(app)` (called
+once from `app.main`) turns every `HTTPException` (raised anywhere, e.g.
+`heroes.py`'s `raise HTTPException(status.HTTP_404_NOT_FOUND, ...)`,
+unchanged), FastAPI's request validation errors, and any other unhandled
+exception into a single consistent `application/problem+json` body — no
+route needs to build this itself. A route that wants a specific `detail`
+message just raises `HTTPException` normally.
+
+## Sunset/Deprecation headers and IXDTF timestamps
+
+`src/app/http_headers.py`'s `sunset(at, link=...)` is a reusable
+dependency (`Depends(sunset(...))`) that sets RFC 8594's `Sunset` header
+(an HTTP-date, not ISO 8601/IXDTF) plus a `Deprecation` header on a
+route — see `app.controllers.protected` for the applied example.
+`src/app/views/base.py`'s `IXDTFDatetime` (a `datetime` `Annotated` type)
+serializes as an RFC 9557 IXDTF string (`...Z[UTC]` — every stored
+timestamp is UTC, see `app.models.base.IdentifiedBase`'s
+`created_at`/`updated_at`); use it on any read view field carrying a
+timestamp.
+
+## Multi-format CRUD (XML / HTML web components)
+
+A resource's JSON CRUD router (`app.controllers.<resource>`) can grow
+sibling routers on separate endpoints, following `app.controllers.
+heroes_xml`/`heroes_web`'s pattern: reuse the JSON router's `<Resource>CRUD`
+dependency and role dependencies directly (an intra-layer import — both
+routers stay in `app.controllers`) rather than duplicating them.
+`app.xml_codec.to_xml`/`from_xml` (generic over any flat Pydantic model)
+and `app.web_components.render_crud_form`/`render_crud_component_js`
+(generic over resource name/field list/API base path) are the reusable
+pieces; only the router wiring is resource-specific. A route whose path
+could otherwise collide with a resource's `/{id}` route (e.g. `/heroes/
+xml`) needs that id parameter typed as `{id:int}` — Starlette's typed
+path converter, so a non-integer literal segment never matches it,
+regardless of router registration order.
 
 ## Three test suites
 

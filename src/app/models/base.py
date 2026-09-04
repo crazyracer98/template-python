@@ -1,7 +1,9 @@
 """Declarative base, async engine/session, and the FastAPI DB dependency."""
 
 from collections.abc import AsyncGenerator
+from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import NullPool
@@ -31,11 +33,16 @@ class IdentifiedBase(Base):
 
     Repository/CRUD generics (see app.repositories and app.crud) are bound to this
     type so they can order/select by `id` without each model redeclaring the column.
+    Also carries `created_at`/`updated_at`, server-assigned in Postgres and set by
+    hand in app.repositories.memory.InMemoryRepository (MODE=mock has no server to
+    default/update them) -- see app.views.base.IXDTFDatetime for how they're serialized.
     """
 
     __abstract__ = True
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:

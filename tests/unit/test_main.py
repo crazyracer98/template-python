@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import debugpy
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -22,7 +23,7 @@ def test_configure_debugger_enables_debugpy_for_dev(monkeypatch: pytest.MonkeyPa
         calls.append(address)
         raise RuntimeError("already listening")
 
-    monkeypatch.setattr(main_module.debugpy, "listen", _fake_listen)
+    monkeypatch.setattr(debugpy, "listen", _fake_listen)
     main_module._configure_debugger("dev")  # must not raise despite the RuntimeError
     assert calls == [("0.0.0.0", 5678)]  # noqa: S104 -- asserting the call args, not a real bind
 

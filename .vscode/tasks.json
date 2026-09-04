@@ -11,7 +11,7 @@
     {
       "label": "Mypy: type check",
       "type": "shell",
-      "command": "uv run mypy src",
+      "command": "uv run mypy src tests",
       "group": "build",
       "problemMatcher": []
     },

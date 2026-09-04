@@ -2,7 +2,9 @@
 
 from collections.abc import AsyncGenerator
 from datetime import datetime
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -50,3 +52,16 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
     async with async_session_factory() as session:
         yield session
         await session.commit()
+
+
+# scope="function", not the Depends() default of "request": a yield dependency's
+# exit code (the commit above) runs *after* the response is sent to the client at
+# request scope, so a client that acts on a write's own response -- POST a hero,
+# then immediately list heroes -- can issue that next request against a database
+# where the INSERT hasn't committed yet, and not see its own write. NullPool (see
+# above) gives every request a brand-new connection, so there's no pool affinity
+# masking it either. "function" ends the dependency after the path operation but
+# before the response goes out, making the write durable by the time the client
+# can possibly react to it. Prefer this alias over Depends(get_db) at call sites
+# so a new resource can't reintroduce that race by accident.
+DBSession = Annotated[AsyncSession, Depends(get_db, scope="function")]

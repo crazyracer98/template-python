@@ -14,6 +14,10 @@ A plain `pytest` run collects `unit/` and `integration/` (both work
 inside the devcontainer / CI as-is) and ignores `e2e/` (see
 `pyproject.toml`'s `addopts`).
 
+Test code is type-checked under the same `mypy --strict` settings as
+`src/` — the hook runs `uv run mypy src tests` — so tests carry full
+annotations too (ruff's `ANN` rules enforce the same).
+
 Both that run and `uv run pytest tests/e2e` independently enforce 95%
 coverage of `src/app` (see `[tool.coverage.report]` in `pyproject.toml`)
 — e2e's coverage comes from the live `api` subprocess, not from the test
@@ -42,6 +46,13 @@ connection reuse.
 - Let `assert` and bare literal comparisons stand — `S101` and `PLR2004`
   are disabled for all three suites precisely so tests can look like
   tests.
+- Monkeypatch the real object, imported from where it's defined
+  (`from redis.asyncio import Redis` → `monkeypatch.setattr(Redis, ...)`),
+  not the copy reachable through the module under test
+  (`checks.Redis`). Both patch the same object, but `mypy --strict`'s
+  `no_implicit_reexport` rejects the second: a module that merely
+  imported a name doesn't export it. Only reach through the module for a
+  name it actually defines (`main_module.settings`).
 
 ## Don't
 

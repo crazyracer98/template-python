@@ -78,7 +78,11 @@ repos:
 
       - id: import-linter
         name: import-linter (app layers)
-        entry: uv run lint-imports
+        # --cache-dir: import-linter has no pyproject.toml setting for this (unlike
+        # ruff/mypy/pytest's cache-dir/cache_dir), only a CLI flag -- see the
+        # cache-dir comment under [tool.ruff] in pyproject.toml for why it's kept
+        # outside the bind-mounted /workspace.
+        entry: uv run lint-imports --cache-dir /home/vscode/.cache/import_linter
         language: system
         pass_filenames: false
         always_run: true

@@ -157,6 +157,11 @@ branch = true
 parallel = true
 relative_files = true
 sigterm = true
+# data_file: see the cache-dir comment under [tool.ruff] above -- same
+# reasoning. Both the main pytest process and the tests/e2e subprocess resolve
+# this same absolute path from this file, so parallel data files still combine
+# correctly despite living outside the bind-mounted /workspace.
+data_file = "/home/vscode/.cache/coverage/.coverage"
 
 [tool.coverage.report]
 # Single source of truth for the coverage gate: both the plain `pytest` run

@@ -22,6 +22,7 @@ from app.controllers import (
     mock,
     protected,
 )
+from app.http_headers import add_security_headers
 from app.problem_details import register_problem_handlers
 from app.telemetry import configure_logging
 
@@ -106,6 +107,7 @@ app = FastAPI(
     },
 )
 register_problem_handlers(app)
+add_security_headers(app)
 
 app.include_router(health.router)
 app.include_router(heroes.router, prefix="/v2")

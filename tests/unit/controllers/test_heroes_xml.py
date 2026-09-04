@@ -80,3 +80,27 @@ def test_hero_xml_delete_missing_returns_404(authed: None) -> None:
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
+
+
+def test_hero_xml_create_rejects_a_billion_laughs_payload(authed: None) -> None:
+    """POST /v2/heroes/xml rejects a nested-entity-expansion payload with 400, not a hang/OOM."""
+    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
+        schema=Hero, repository=InMemoryRepository(HeroModel)
+    )
+    billion_laughs = b"""<?xml version="1.0"?>
+<!DOCTYPE lolz [
+ <!ENTITY lol "lol">
+ <!ELEMENT lolz (#PCDATA)>
+ <!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+ <!ENTITY lol2 "&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;">
+]>
+<hero><name>&lol2;</name></hero>"""
+    try:
+        response = client.post(
+            "/v2/heroes/xml",
+            content=billion_laughs,
+            headers={"Content-Type": "application/xml"},
+        )
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+    assert response.status_code == 400

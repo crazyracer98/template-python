@@ -1,10 +1,11 @@
-"""Unit test: the sunset() dependency sets Sunset/Deprecation/Link headers."""
+"""Unit test: the sunset() dependency and add_security_headers() middleware."""
 
 from datetime import UTC, datetime
 
-from fastapi import Response
+from fastapi import FastAPI, Response
+from fastapi.testclient import TestClient
 
-from app.http_headers import sunset
+from app.http_headers import add_security_headers, sunset
 
 
 def test_sunset_sets_deprecation_and_sunset_headers() -> None:
@@ -21,3 +22,28 @@ def test_sunset_sets_link_header_when_given() -> None:
     response = Response()
     sunset(datetime(2027, 1, 1, tzinfo=UTC), link="/heroes")(response)
     assert response.headers["Link"] == '</heroes>; rel="sunset"'
+
+
+def test_add_security_headers_sets_headers_on_every_response() -> None:
+    """add_security_headers(app) sets CSP/X-Frame-Options/X-Content-Type-Options."""
+    app = FastAPI()
+
+    @app.get("/ok")
+    def ok() -> dict[str, bool]:
+        return {"ok": True}
+
+    add_security_headers(app)
+    response = TestClient(app).get("/ok")
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "default-src 'self'" in response.headers["Content-Security-Policy"]
+    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+
+
+def test_add_security_headers_covers_error_responses_too() -> None:
+    """The headers are also present on a response FastAPI builds itself (a 404)."""
+    app = FastAPI()
+    add_security_headers(app)
+    response = TestClient(app).get("/does-not-exist")
+    assert response.status_code == 404
+    assert response.headers["X-Frame-Options"] == "DENY"

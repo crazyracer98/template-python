@@ -26,8 +26,9 @@ state of its own beyond what it's explicitly passed or reads from
 - `telemetry.py` — structured JSON logging setup; see "Structured
   logging / OTEL" below.
 - `problem_details.py` — RFC 9457 error responses; see below.
-- `http_headers.py` — the `Sunset`/`Deprecation` header dependency; see
-  "Sunset/Deprecation headers" below.
+- `http_headers.py` — the `Sunset`/`Deprecation` header dependency and
+  the baseline security-headers middleware; see "Sunset/Deprecation
+  headers" below.
 - `xml_codec.py` / `web_components.py` — the generic XML and HTML-form
   rendering pieces a resource's sibling routers reuse; see
   `controllers/README.md`'s "Multi-format CRUD" section for the pattern.
@@ -105,6 +106,15 @@ Authorization Code + PKCE provider works by pointing
 Add auth to a route with `Depends(get_current_claims)`; routes that
 don't take that dependency stay public.
 
+`oidc_audience` (`OIDC_AUDIENCE`) is required — `config.py`'s validation
+refuses to construct `Settings` with `MODE=production` and no
+`oidc_audience` set — because `decode_bearer_token` only verifies the
+JWT's `aud` claim when it's set, and an unchecked audience would accept
+a token issued for any other client of the same provider. `dev`/`mock`
+stay opt-in (`../../.devcontainer/stack/keycloak/keycloak.env` sets it
+anyway, via the `api` client's `api-audience` protocol mapper in
+`realm-export.json`, so every mode's tokens actually carry it).
+
 ### RBAC
 
 Each Keycloak test user carries one client role on the `api` client
@@ -140,7 +150,13 @@ not a per-request one.
   as-is. `POST /mock/token` (`controllers.mock`, mounted only in this
   mode) issues a token shaped like a real Keycloak one (same
   `resource_access.<client>.roles` claim), so RBAC is exercisable
-  without Keycloak too.
+  without Keycloak too. Because it bypasses auth entirely, `MODE=mock`
+  also requires `ALLOW_MOCK_MODE=1` (`Settings.allow_mock_mode`) —
+  `config.py`'s validation refuses to construct `Settings` with
+  `MODE=mock` and no `ALLOW_MOCK_MODE`, so the mode can never be reached
+  by `MODE`'s own default/typo alone. Nothing in this repo sets it today
+  (no compose file/CI job runs `MODE=mock`); a future local-only use adds
+  it explicitly alongside `MODE=mock`.
 - `production`: no debugger. The `../../Dockerfile`'s `runner` stage
   sets `ENV MODE=production` as the single source of truth for that
   default.
@@ -186,6 +202,14 @@ HTTP-date, not ISO 8601/IXDTF) plus a `Deprecation` header on a route —
 see `controllers/protected.py` for the applied example. See
 `views/README.md`'s `IXDTFDatetime` for how read views serialize their
 own timestamps.
+
+`http_headers.py`'s `add_security_headers(app)` is unconditional
+middleware (`main.py` calls it once, right after
+`register_problem_handlers`) that sets `Content-Security-Policy`,
+`X-Frame-Options: DENY`, and `X-Content-Type-Options: nosniff` on every
+response, including ones a route's own dependencies never run for (a
+404, an RFC 9457 error body) — unlike `sunset()` above, no route opts
+into this individually.
 
 ## Example CRUD resource: Hero
 

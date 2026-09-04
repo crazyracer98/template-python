@@ -1,9 +1,9 @@
 """Application settings, sourced entirely from the process environment."""
 
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Mode = Literal["dev", "mock", "production"]
@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     # production default.
     mode: Mode = "dev"
 
+    # MODE=mock trusts every bearer token's claims and skips every real
+    # external service (see oidc.decode_bearer_token) -- a deployment that
+    # somehow ends up running it (a misconfigured env, a copy-pasted compose
+    # file) would silently bypass auth entirely. Requiring this second,
+    # explicitly-named flag means MODE=mock can never be reached by MODE's
+    # own default/typo alone; only .devcontainer/compose.yml and CI set it,
+    # both already scoped to local/CI use.
+    allow_mock_mode: bool = False
+
     postgres_user: str = "app"
     postgres_password: str = "app"  # noqa: S105 -- local Postgres default, not a real secret
     postgres_db: str = "app"
@@ -60,7 +69,8 @@ class Settings(BaseSettings):
     # without a network round trip; the JWKS used to validate tokens is
     # instead discovered lazily from issuer_url (see oidc.py), so unit tests
     # that never authenticate never need network access. audience is left
-    # unset: the bundled dev realm's "api" client does not set one.
+    # unset outside "production" (see _require_oidc_audience_in_production
+    # below): the bundled dev realm's "api" client does not set one.
     oidc_issuer_url: str = "http://localhost:8080/realms/template-fastapi"
     oidc_authorization_url: str = (
         "http://localhost:8080/realms/template-fastapi/protocol/openid-connect/auth"
@@ -72,6 +82,30 @@ class Settings(BaseSettings):
     oidc_client_id: str = "api"
     oidc_algorithm: str = "RS256"
     oidc_audience: str | None = None
+
+    @model_validator(mode="after")
+    def _require_oidc_audience_in_production(self) -> Self:
+        """Refuse to construct production Settings with no audience check configured.
+
+        oidc.decode_bearer_token only verifies the "aud" claim when oidc_audience is
+        set, so an unset audience in production would accept a token issued for any
+        other client of the same provider. dev/mock stay opt-in (the bundled dev
+        Keycloak realm sets no audience mapper), so this only tightens the mode that
+        actually faces real traffic.
+        """
+        if self.mode == "production" and self.oidc_audience is None:
+            raise ValueError("oidc_audience must be set when MODE=production")
+        return self
+
+    @model_validator(mode="after")
+    def _require_allow_mock_mode_flag(self) -> Self:
+        """Refuse to construct MODE=mock Settings without the explicit allow_mock_mode flag.
+
+        See allow_mock_mode's own docstring for why this second flag exists.
+        """
+        if self.mode == "mock" and not self.allow_mock_mode:
+            raise ValueError("MODE=mock requires ALLOW_MOCK_MODE=1 to be set")
+        return self
 
 
 @lru_cache

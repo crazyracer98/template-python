@@ -14,6 +14,9 @@ def test_hero_form_serves_html_and_accepts_a_submission(
     form_response = page.request.get(f"{base_url}/v2/heroes/form", headers=headers)
     assert form_response.ok
     assert "<form" in form_response.text()
+    assert form_response.headers["x-frame-options"] == "DENY"
+    assert form_response.headers["x-content-type-options"] == "nosniff"
+    assert "default-src 'self'" in form_response.headers["content-security-policy"]
 
     submit_response = page.request.post(
         f"{base_url}/v2/heroes/form",

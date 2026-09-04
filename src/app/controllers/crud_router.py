@@ -15,6 +15,7 @@ so a caller gets real type-checking on the call itself.
 from collections.abc import Sequence
 from typing import Any
 
+from defusedxml.common import DefusedXmlException
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse, Response
@@ -37,6 +38,20 @@ def _with_dependency_headers[ResponseT: Response](
     """
     built.headers.raw.extend(response.headers.raw)
     return built
+
+
+def _parse_xml_body[ModelT: BaseModel](body: bytes, schema: type[ModelT]) -> ModelT:
+    """Parse a request body with from_xml, rejecting a malicious payload with 400.
+
+    defusedxml.ElementTree.fromstring raises a DefusedXmlException (e.g.
+    EntitiesForbidden) for a "billion laughs"-style entity-expansion attack --
+    without this, that exception would otherwise reach problem_details.py's generic
+    500 handler instead of being reported as the client error it is.
+    """
+    try:
+        return from_xml(body, schema)
+    except DefusedXmlException as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Malformed XML body") from exc
 
 
 def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel](
@@ -121,7 +136,7 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
     async def create_record_xml(
         crud: crud_dependency, request: Request, response: Response
     ) -> Response:
-        record = from_xml(await request.body(), create_schema)
+        record = _parse_xml_body(await request.body(), create_schema)
         created = await crud.create(record)
         return _with_dependency_headers(
             response,
@@ -145,7 +160,7 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
     async def update_record_xml(
         record_id: int, crud: crud_dependency, request: Request, response: Response
     ) -> Response:
-        record = from_xml(await request.body(), update_schema)
+        record = _parse_xml_body(await request.body(), update_schema)
         updated = await crud.update(record_id, record)
         if updated is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)

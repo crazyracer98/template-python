@@ -44,8 +44,8 @@ The new `api` service:
 - `env_file:` the same three per-service files
   `.devcontainer/compose.yml` uses (`./.devcontainer/stack/postgres/postgres.env`,
   `./.devcontainer/stack/s3/s3.env`, `./.devcontainer/stack/keycloak/keycloak.env`)
-  — never re-pin those values a second time (CLAUDE.md's "Configuration"
-  section).
+  — never re-pin those values a second time (`.devcontainer/stack/
+  README.md`'s "Configuration" section).
 - `environment:` the same fixed in-network hostnames/ports
   `.devcontainer/compose.yml` sets literally (`POSTGRES_HOST: postgres`,
   `POSTGRES_PORT: "5432"`, `S3_ENDPOINT_URL: http://s3:9000`,
@@ -80,9 +80,9 @@ No top-level `volumes:` needed beyond what each included fragment already
 declares for itself (`postgres-data`, `s3-data`, `redis-data`) — same as
 `.devcontainer/compose.yml`.
 
-Give the file the usual one-line header comment (CLAUDE.md's "File
-headers") explaining it's the runner-image smoke-test stack, distinct
-from `.devcontainer/compose.yml`.
+Give the file the usual one-line header comment (root `README.md`'s
+"Code style" section) explaining it's the runner-image smoke-test stack,
+distinct from `.devcontainer/compose.yml`.
 
 ### GitHub Actions workflow
 

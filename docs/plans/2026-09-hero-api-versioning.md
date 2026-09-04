@@ -11,9 +11,10 @@ Introduce path-prefixed `/v1/heroes*` (deprecated) and `/v2/heroes*`
 backward-compatibility CRUD wrapper (`CompatCRUD`) so `/v1` stays backed by
 the *same* repository/data as `/v2` instead of duplicating persistence.
 This establishes the repo-wide versioning convention — recorded in
-`CLAUDE.md` and an ADR — that future resources copy: a `*_vN.py` views
-module + converter functions, a `CompatCRUD`-wrapped sibling controller
-set, and a router-level `sunset()` dependency.
+`src/app/controllers/README.md` and an ADR — that future resources
+copy: a `*_vN.py` views module + converter functions, a
+`CompatCRUD`-wrapped sibling controller set, and a router-level
+`sunset()` dependency.
 
 ## Depends on
 
@@ -359,20 +360,20 @@ Run `uv run lint-imports` to confirm.
   controller, not new CRUD infrastructure) — same framing as
   `0001-mvc-layering-with-a-generic-crud-interface.md`'s "cheap to add the
   next one" argument.
-- `CLAUDE.md`: new section (placed near "Multi-format CRUD (XML / HTML web
-  components)") titled "API and model versioning", describing: the
-  `/v{N}` path-prefix convention; that the DB model always represents the
-  current shape only; the `*_vN.py` views module + converter-function
-  pattern; `crud/compat.py`'s `CompatCRUD` as the reusable wrapper; router-
-  level `sunset()` application for a whole deprecated version at once.
+- `src/app/controllers/README.md`: new section (placed near its existing
+  "Multi-format CRUD" section) titled "API and model versioning",
+  describing: the `/v{N}` path-prefix convention; that the DB model
+  always represents the current shape only; the `*_vN.py` views module +
+  converter-function pattern; `crud/compat.py`'s `CompatCRUD` as the
+  reusable wrapper; router-level `sunset()` application for a whole
+  deprecated version at once; and version siblings (`heroes_v1.py`
+  alongside `heroes.py`) as the same kind of sibling-router reuse
+  "Multi-format CRUD" already documents.
 - `src/app/crud/README.md`: short mention of `CompatCRUD` as an available
   building block for a resource that's grown a deprecated version.
 - `src/app/views/README.md`: short mention of the `*_vN.py` + converter
   pattern alongside the existing `*Base`/`*Create`/`*Update`/plain-name
   convention.
-- `src/app/controllers/README.md` (if it documents the xml/web sibling
-  convention): extend it to mention version siblings (`heroes_v1.py`
-  alongside `heroes.py`) as the same kind of sibling-router reuse.
 
 ## Verification
 

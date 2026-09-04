@@ -19,6 +19,19 @@ coverage of `src/app` (see `[tool.coverage.report]` in `pyproject.toml`)
 — e2e's coverage comes from the live `api` subprocess, not from the test
 process itself; see `e2e/README.md`.
 
+An `async def test_...` runs with no `@pytest.mark.asyncio` marker
+needed (`asyncio_mode = "auto"` in `[tool.pytest.ini_options]`), and
+every async test in one run shares a single event loop
+(`asyncio_default_fixture_loop_scope = "session"`) — required because
+`src/app/models/base.py`'s async engine/session factory are process-wide
+singletons (matching `get_settings()`'s pattern): asyncpg ties a
+connection to the event loop that opened it, and a run mixes
+pytest-asyncio's loop with `TestClient`'s own background-thread loop, so
+pooling a connection across that boundary raises
+`asyncpg.exceptions.InterfaceError`. The engine also uses `NullPool` (a
+fresh connection per checkout) for the same reason, at the cost of
+connection reuse.
+
 ## Do
 
 - Name a test file after the module or integration point it covers,

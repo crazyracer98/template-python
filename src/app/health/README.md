@@ -29,8 +29,8 @@ service the app depends on, backing `app.controllers.health`'s
 
 ## Don't
 
-- Import from `app.controllers` — see the root `CLAUDE.md`'s
-  "src/app/ layering" section. `app.models`/`app.oidc`/`app.config` are
+- Import from `app.controllers` — see `../README.md`'s "Layering"
+  section. `app.models`/`app.oidc`/`app.config` are
   fine (`DatabaseHealthCheck` takes the app's own engine;
   `OIDCHealthCheck` reimplements just the discovery-URL fetch, not a
   full import of `app.oidc`, to stay a plain HTTP reachability check).

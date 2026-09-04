@@ -11,14 +11,21 @@ made. A plan can reference an ADR it depends on or that it prompts.
 ## Do
 
 - Update a plan's own Status as work progresses, in place — a plan is a
-  living document until it's marked `Done` or `Abandoned`, unlike an ADR.
-- Fold a plan's outcome into an ADR (if it involved a significant,
-  reversible-at-cost decision) or `../` (product knowledge) once it's
-  done, rather than leaving that knowledge only in the plan.
+  living document until it's marked `Done` or `Abandoned`.
+- Once a plan's work has been executed, either delete the file, or — if
+  it captured knowledge worth keeping (an ADR-worthy decision, reference
+  material for future work) — fold that into an ADR (`../adrs/`, if it
+  involved a significant, reversible-at-cost decision) or `../` (product
+  knowledge), then remove the plan file. Either way, a plan under this
+  directory is transient and doesn't linger once its work is done; print
+  a brief commit message summarizing the change for the user to use (not
+  create the commit yourself, unless asked).
 
 ## Don't
 
 - Use a plan file for a decision record — a plan can point at an ADR,
   but the decision and its reasoning belong in `../adrs/`.
-- Delete a finished plan — mark it `Done` and leave it; it's a record of
-  what was intended and what actually happened.
+- Leave a finished plan's file in place "as a record" — that's what
+  folding its outcome into an ADR or `../` and removing the file is for;
+  an untouched pile of `Done` plan files just makes the active ones
+  harder to find.

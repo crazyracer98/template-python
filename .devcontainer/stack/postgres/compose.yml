@@ -1,9 +1,9 @@
 # Stack service: Postgres, reachable only from other containers on
 # the compose-generated default network (see ../README.md).
 # POSTGRES_* values come from postgres.env, next to this file (see
-# CLAUDE.md's "Configuration" section). The env_file path below is
+# ../README.md's "Configuration" section). The env_file path below is
 # relative to this file's own directory, not .devcontainer/ -- see
-# CLAUDE.md's "Devcontainer stack pattern" section.
+# ../README.md's "Devcontainer stack pattern" section.
 services:
   postgres:
     image: postgres:16.15-alpine

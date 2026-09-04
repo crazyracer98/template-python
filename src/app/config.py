@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # some pulled straight from a stack service's own env file,
     # some (DATABASE_URL, s3_access_key/s3_secret_key) assembled below
     # from those raw pieces since Compose can't interpolate a value from
-    # one env file into another compose file's own env var. See CLAUDE.md's
-    # "Configuration" section.
+    # one env file into another compose file's own env var. See
+    # README.md's "Configuration" section.
     model_config = SettingsConfigDict(extra="ignore")
 
     app_name: str = "template-fastapi"

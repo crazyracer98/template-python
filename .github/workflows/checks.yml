@@ -37,8 +37,8 @@ jobs:
       # .devcontainer/devcontainer.json's dockerComposeFile) but never
       # tears it down -- that's fine for a throwaway CI VM, but this repo
       # wants a clean, explicit teardown regardless. Keep this file list
-      # in sync with dockerComposeFile (see CLAUDE.md's "Devcontainer
-      # stack pattern").
+      # in sync with dockerComposeFile (see .devcontainer/stack/README.md's
+      # "Devcontainer stack pattern").
       - name: Tear down devcontainer stack
         if: always()
         run: |

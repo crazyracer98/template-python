@@ -13,4 +13,5 @@
 ## Don't
 
 - Pin an Action to a floating tag like `@v7` or `@main` — pin the exact
-  patch version (see the root `CLAUDE.md`).
+  patch version (see the root `README.md`'s "Versions and config"
+  section).

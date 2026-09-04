@@ -27,7 +27,9 @@ setup composed from independent, swappable pieces.
 - `pyproject.toml` / `uv.lock` — dependencies, managed with `uv`, pinned
   to exact patch versions.
 - `.pre-commit-config.yaml` — git hooks, run by `prek` or `pre-commit`.
-- `CLAUDE.md` — conventions for working in this repository.
+- `CLAUDE.md` — the AI-assisted coding workflow Claude Code follows in
+  this repository; general conventions live in this file and each
+  directory's own `README.md` instead.
 
 ## Getting started
 
@@ -68,9 +70,31 @@ everything at once with:
 uv run prek run --all-files --hook-stage manual
 ```
 
-Commit messages are checked separately, against
-[Conventional Commits](https://www.conventionalcommits.org/), at commit
-time — see `CLAUDE.md`'s "Conventional commits" section.
+If a rule produces a false positive, silence that one line with a
+justified `# noqa: <code>` rather than loosening the project-wide
+configuration. Every function (including tests, `__init__`, and dunder
+methods) gets a one-line docstring stating what it does — ruff's
+`D100`–`D107` enforce this; see "Code style" below for what the
+docstring should actually say.
+
+Hooks are defined once in `.pre-commit-config.yaml` and run by
+[`prek`](https://prek.j178.dev/) (a faster, drop-in-compatible
+reimplementation of `pre-commit`, already a `dev` dependency — the
+classic `pre-commit` CLI reads the same config file if you prefer it).
+Fast, basic checks run on commit; slower, extensive checks (mypy,
+pytest, `uv lock --check`) run on push. Every hook except the
+commit-message check also carries the `manual` stage, so the command
+above runs everything else at once. `.vscode/settings.json`'s
+`git.commandsToLog` surfaces a failing hook's output in VS Code's Git
+output channel immediately, instead of only on request.
+
+Commit messages are checked separately: every commit message must
+follow [Conventional Commits](https://www.conventionalcommits.org/),
+enforced by the `conventional-pre-commit` git hook at the `commit-msg`
+stage — an improperly formatted message is rejected before the commit
+is created. This can't be run via the `manual` stage like the other
+hooks (see the comment in `.pre-commit-config.yaml`); the only way to
+check it is to actually commit.
 
 CI (`.github/workflows/checks.yml`) runs the same `--hook-stage manual`
 command, inside the devcontainer itself, on every push and pull request.
@@ -78,6 +102,60 @@ command, inside the devcontainer itself, on every push and pull request.
 alpha/beta/rc/full release with an auto-generated changelog and the
 built image attached (and optionally pushed to an OCI registry) — see
 `.github/workflows/README.md`.
+
+## Versions and config
+
+Every version and config value is defined in exactly one place; nothing
+duplicates or re-pins it elsewhere:
+
+- Python/Debian base image versions: the `PYTHON_VERSION`/`DEBIAN_VERSION`
+  `ARG` defaults at the top of the `Dockerfile`. `.devcontainer/compose.yml`
+  does **not** pass matching `args:` — the Dockerfile's own defaults are
+  authoritative because it's the file closer to where they're used. To
+  change them, edit the `Dockerfile`, not the compose file.
+- Python package versions: `pyproject.toml` / `uv.lock`. Dependencies are
+  managed with `uv` — use `uv add <package>` / `uv sync` rather than
+  editing the dependency lists by hand or invoking `pip` directly.
+  All development-only tooling — linters, type checker, test runners,
+  Playwright — lives in the single `dev` optional-dependencies group
+  rather than split across several groups, since it's all
+  development-related; if a future group needs another group's packages,
+  reference it as a self-referential extra (e.g. `"template-fastapi[dev]"`,
+  per PEP 621) instead of re-pinning the same package a second time.
+- Everything else pinned (base images, Actions, hook revisions): pinned
+  once, at its single point of use, to an exact patch version — never a
+  floating range or `latest` — so Renovate/Dependabot can bump them one
+  at a time and the diff shows exactly what changed. The one exception is
+  the Dockerfile's `PYTHON_VERSION` `ARG`: it's pinned to minor only,
+  because `mcr.microsoft.com/devcontainers/python` (the `develop` stage's
+  base image) doesn't publish patch-granularity tags — there is no patch
+  version to pin to. See the comment at that `ARG` in the `Dockerfile`.
+
+`ruff`, `mypy`, and `pytest` all point their cache dirs at
+`/home/vscode/.cache/<tool>` (set once each, in `pyproject.toml`'s
+`[tool.ruff]`/`[tool.mypy]`/`[tool.pytest.ini_options]`) instead of the
+project root. Same reasoning as not bind-mounting the venv (see
+`.devcontainer/README.md`'s "Don't" section): a cache inside the
+bind-mounted `/workspace` gets scanned file-by-file by host
+antivirus/malware tools on Windows and is painfully slow to write to. A
+new tool with its own on-disk cache follows the same pattern.
+
+## Code style
+
+Every file gets a brief header stating what the file *is for* — one
+line, sometimes two: a leading comment for most formats, a module
+docstring for Python (also required by ruff's `D100`). Never describe
+the file's contents in the header; that's what reading the file is for.
+Markdown files' own title/opening line already serves this purpose. A
+format with no comment syntax (`.json`) documents itself via the
+directory's `README.md` instead.
+
+A comment earns its place by saying something the code/config next to
+it can't: *why* it's written this way, a non-obvious consequence, or a
+constraint that isn't visible locally. Don't add a comment that just
+restates what the following line already says in code — if removing a
+comment loses no information, remove it. Every existing comment in this
+repository follows this rule; keep new ones held to the same bar.
 
 ## Do
 
@@ -88,11 +166,9 @@ built image attached (and optionally pushed to an OCI registry) — see
 
 ## Don't
 
-- Add a dependency, base image, Action, or hook revision without pinning
-  it to an exact patch version.
 - Commit a `.env` file, or read one from application code — configuration
   lives in the compose files; secrets live in `.secrets/`.
 - Add a `ports:` mapping or a `networks:` block to any file under
-  `.devcontainer/` — see `CLAUDE.md`'s "Devcontainer stack pattern"
-  section for how host access and inter-service networking are handled
-  instead.
+  `.devcontainer/` — see `.devcontainer/stack/README.md`'s "Devcontainer
+  stack pattern" section for how host access and inter-service
+  networking are handled instead.

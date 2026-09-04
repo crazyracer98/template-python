@@ -17,11 +17,10 @@ subpackage.
 - Subclass `IdentifiedBase`, not `Base` directly, unless a model
   genuinely doesn't have a single-column integer `id` primary key.
 - Add a migration after adding or changing a model: `uv run alembic
-  revision --autogenerate -m "..."` — see the root `CLAUDE.md`'s
-  "Alembic migrations" section.
+  revision --autogenerate -m "..."` — see `../../../alembic/README.md`.
 
 ## Don't
 
 - Import from `app.views`, `app.repositories`, `app.crud`,
-  `app.health`, or `app.controllers` — see the root `CLAUDE.md`'s
-  "src/app/ layering" section.
+  `app.health`, or `app.controllers` — see `../README.md`'s "Layering"
+  section.

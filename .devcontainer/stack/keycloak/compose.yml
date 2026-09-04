@@ -3,7 +3,7 @@
 # forwardPorts, not through compose port publishing (see ../README.md
 # and the root README's "Don't"). Relative paths below (the env_file and the
 # bind-mount) resolve relative to this file's own directory, not
-# .devcontainer/ — see CLAUDE.md's "Devcontainer stack pattern" section.
+# .devcontainer/ — see ../README.md's "Devcontainer stack pattern" section.
 # KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD come from keycloak.env, next to
 # this file.
 services:

@@ -8,7 +8,7 @@ include:
 # App service: the FastAPI application itself, built from the top-level
 # Dockerfile's `develop` stage. The workspace is bind-mounted so source
 # edits are picked up without a rebuild. env_file below pulls in each
-# stack service's own credentials (see CLAUDE.md's "Configuration"
+# stack service's own credentials (see stack/README.md's "Configuration"
 # section); src/app/config.py assembles DATABASE_URL and the S3 access/
 # secret key fields from the raw postgres/rustfs values at runtime, and
 # OIDC_* arrive from keycloak.env already fully composed.
@@ -19,8 +19,8 @@ services:
       dockerfile: Dockerfile
       target: develop
       # No PYTHON_VERSION/DEBIAN_VERSION here: the Dockerfile's own ARG
-      # defaults are the single source for those — see CLAUDE.md's
-      # "Dependency management" section.
+      # defaults are the single source for those — see the root
+      # README.md's "Versions and config" section.
     volumes:
       - ..:/workspace:cached
       # No volume for the venv (see UV_PROJECT_ENVIRONMENT in the
@@ -53,8 +53,8 @@ services:
       # Fixed in-network hostnames/ports, not credentials, so they're
       # literal here rather than pulled from a stack env file. MODE is a
       # behavior toggle, not a credential either -- see src/app/config.py
-      # and CLAUDE.md's "MODE" notes; the devcontainer always runs dev
-      # (debugger enabled) unless overridden.
+      # and src/app/README.md's "MODE" section; the devcontainer always
+      # runs dev (debugger enabled) unless overridden.
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       S3_ENDPOINT_URL: http://s3:9000

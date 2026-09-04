@@ -1,9 +1,9 @@
 # Stack service: RustFS (S3-compatible object storage), reachable
 # only from other containers on the compose-generated default network.
 # RUSTFS_ACCESS_KEY/RUSTFS_SECRET_KEY come from s3.env, next to this file
-# (see CLAUDE.md's "Configuration" section). The env_file path below is
+# (see ../README.md's "Configuration" section). The env_file path below is
 # relative to this file's own directory, not .devcontainer/ -- see
-# CLAUDE.md's "Devcontainer stack pattern" section.
+# ../README.md's "Devcontainer stack pattern" section.
 services:
   s3:
     image: rustfs/rustfs:1.0.0-rc.5-glibc

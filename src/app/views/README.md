@@ -6,9 +6,18 @@ The View layer: Pydantic schemas returned by and accepted from
 - `base.py` — `ORMView`, the base every view inherits from
   (`model_config = ConfigDict(from_attributes=True)`, which is what lets
   `app.crud.base.CRUDInterface` build one straight from a SQLAlchemy
-  model instance via `model_validate`).
+  model instance via `model_validate`), and `IXDTFDatetime` (see below).
 - `hero.py` — the example Hero views; see `../README.md`'s "Example CRUD
   resource: Hero".
+
+## IXDTF timestamps
+
+`base.py`'s `IXDTFDatetime` (a `datetime` `Annotated` type) serializes
+as an RFC 9557 IXDTF string (`...Z[UTC]` — every stored timestamp is
+UTC, see `app.models.base.IdentifiedBase`'s `created_at`/`updated_at`);
+use it on any read view field carrying a timestamp. See
+`../README.md`'s "Sunset/Deprecation headers" for the related, but
+HTTP-date-formatted, `Sunset` header.
 
 ## Do
 
@@ -22,6 +31,6 @@ The View layer: Pydantic schemas returned by and accepted from
 ## Don't
 
 - Import from `app.models`, `app.repositories`, `app.crud`,
-  `app.health`, or `app.controllers` — see the root `CLAUDE.md`'s
-  "src/app/ layering" section. A view converts to/from an ORM instance
-  structurally (`from_attributes`), never by importing the model class.
+  `app.health`, or `app.controllers` — see `../README.md`'s "Layering"
+  section. A view converts to/from an ORM instance structurally
+  (`from_attributes`), never by importing the model class.

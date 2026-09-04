@@ -1,8 +1,8 @@
 # docs/adrs/
 
 Architecture Decision Records: one file per significant, app-specific
-decision and the reasoning behind it (not repository conventions — those
-belong in the root `CLAUDE.md`; see its "Documentation split" section).
+decision and the reasoning behind it (not repository conventions —
+those belong in each directory's own `README.md` instead).
 
 - Format: [`template.md`](template.md) (Michael Nygard's ADR format —
   Status, Context, Decision, Consequences).

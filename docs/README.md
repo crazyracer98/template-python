@@ -1,8 +1,9 @@
 # docs/
 
 Knowledge about what this application does and why — not how the
-repository is laid out (each directory's own `README.md` covers that) and
-not development conventions (`CLAUDE.md` at the repo root covers that).
+repository is laid out or how it's developed (each directory's own
+`README.md` covers that; see the root `README.md`) and not the
+AI-assisted coding workflow (`CLAUDE.md` at the repo root covers that).
 
 - `adrs/` — Architecture Decision Records: app-specific decisions and
   the reasoning behind them. See `adrs/README.md`.

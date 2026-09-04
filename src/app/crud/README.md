@@ -20,8 +20,8 @@ router that wires the two through `CRUDInterface`.
 
 ## Don't
 
-- Import from `app.health` or `app.controllers` — see the root
-  `CLAUDE.md`'s "src/app/ layering" section.
+- Import from `app.health` or `app.controllers` — see `../README.md`'s
+  "Layering" section.
 - Add a resource-specific method to `CRUDInterface` — if a resource
   needs behavior beyond the five generic operations, add it in that
   resource's controller instead, calling `CRUDInterface`/the repository

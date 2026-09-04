@@ -11,7 +11,20 @@
 - `.env` — credential/config values shared between `compose.yml` and
   `stack/*/compose.yml` via Compose's own variable interpolation
   (`${VAR}`) — not an application dotenv; see the file's own header
-  comment and `CLAUDE.md`'s "Configuration" section.
+  comment and `stack/README.md`'s "Configuration" section.
+
+## Docker-in-Docker vs. the host's Docker
+
+This devcontainer has its own isolated Docker-in-Docker daemon (the
+`docker-in-docker` feature in `devcontainer.json`). It is **not** the
+same daemon running this project's own compose stack (`api`, `postgres`,
+the rest of `stack/`) — that stack is started by whatever invoked
+"Reopen in Container" against the *host's* Docker. So `docker`/`docker
+compose` run from inside the devcontainer can build and run throwaway
+containers of their own, but can never see or `exec` into this project's
+sibling containers (e.g. `selenium`) — only a `docker compose` invoked
+on the host can. See `stack/selenium/README.md` for the concrete case
+this affects.
 
 ## SSH agent forwarding
 
@@ -44,8 +57,12 @@ this was added, which is harmless there since CI never pushes.
   hardcoded a second time.
 - Write a bind-mount source path in a fragment under `stack/` as
   relative to that fragment's own directory, the same as if it were the
-  only Compose file in play — see `CLAUDE.md`'s "Devcontainer stack
-  pattern" section for why.
+  only Compose file in play — see `stack/README.md`'s "Devcontainer stack
+  pattern" section for why. `compose.yml` itself is the exception: since
+  it reaches *into* a fragment's directory (its own `env_file:` list,
+  `stack/postgres/postgres.env` and friends), those paths are written in
+  — and so resolve against — this directory, and need the full
+  `./stack/<name>/<file>` form instead.
 
 ## Don't
 
@@ -54,6 +71,6 @@ this was added, which is harmless there since CI never pushes.
   container's writable layer instead. (`claude-config` is a deliberate,
   narrow exception — see `compose.yml`'s comment on that volume.)
 - Add a `ports:` mapping or a `networks:` block anywhere here — see
-  `CLAUDE.md`'s "Devcontainer stack pattern" section.
+  `stack/README.md`'s "Devcontainer stack pattern" section.
 - Pin a feature or image version as `latest` — pin the exact version so
   Renovate/Dependabot can bump it deliberately.

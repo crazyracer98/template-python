@@ -25,8 +25,8 @@ to, parameterized by a model type rather than one class per resource.
 
 ## Don't
 
-- Import from `app.crud`, `app.health`, or `app.controllers` — see the
-  root `CLAUDE.md`'s "src/app/ layering" section. `app.models` is fine
+- Import from `app.crud`, `app.health`, or `app.controllers` — see
+  `../README.md`'s "Layering" section. `app.models` is fine
   (`SQLAlchemyRepository` is generic over `IdentifiedBase`).
 - Give `SQLAlchemyRepository` resource-specific logic — anything a
   particular resource needs belongs in `app.crud` or the controller

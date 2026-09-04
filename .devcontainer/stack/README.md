@@ -5,12 +5,9 @@ cache, identity provider, e2e test runner, ...). Each contains:
 
 - `compose.yml` — the Compose fragment for that service.
 - `README.md` — what it is, connection details, and how to remove it.
-- `<service>.env` — that service's local-dev-only default credentials,
-  loaded via `env_file:` in this fragment's `compose.yml` (and, where
-  `api` needs the same values, listed again under its own `env_file:` in
-  `../compose.yml` — see CLAUDE.md's "Configuration" section) — only
-  present when the service actually has credentials to hold (redis and
-  selenium don't).
+- `<service>.env` — that service's local-dev-only default credentials;
+  see "Configuration" below — only present when the service actually has
+  credentials to hold (redis and selenium don't).
 
 Every fragment here is listed in `../compose.yml`'s own `include:` list,
 so all of them start together. Each fragment's relative bind-mount or
@@ -19,6 +16,58 @@ so all of them start together. Each fragment's relative bind-mount or
 the same as if it were the only Compose file in play; see each
 fragment's own header comment.
 
+## Devcontainer stack pattern
+
+`../compose.yml` defines the app service and pulls every supporting
+service in via this `include:` list — not the `dockerComposeFile` array
+in `devcontainer.json`, which only ever names `../compose.yml` itself. A
+new service follows this same `compose.yml` + `README.md` pattern and
+gets added to `../compose.yml`'s `include:` list.
+
+No fragment here (including the app service's own `../compose.yml`)
+declares a `ports:` mapping or a `networks:` block:
+
+- **No `networks:`** — every service already reaches every other one by
+  its service name on the default network Compose generates for this
+  project; a named network here would only add a place for that to drift.
+- **No `ports:`** — these are backend services meant to be reached only
+  from other containers. If a service genuinely needs a host-browser-
+  reachable port (Keycloak's login UI is the one example here), that
+  port goes in `forwardPorts`/`portsAttributes` in `../devcontainer.json`
+  instead — the Dev Containers spec forwards a container's port directly
+  from its network namespace, so this doesn't require publishing it via
+  Compose at all. This keeps "what's reachable from the host" defined in
+  exactly one place instead of scattered `ports:` blocks.
+
+Every stack fragment's service also defines a `healthcheck:`, and
+`../compose.yml`'s `api` service lists a matching `depends_on:
+<service>: condition: service_healthy` entry for it. Compose won't start
+`api` until every dependency reports healthy, so `docker compose up`
+(and therefore `devcontainers/ci`'s `runCmd`, and a fresh
+`postCreateCommand`) never runs a check or a test against a stack
+service that's still starting — e.g. Keycloak, a JVM app doing
+`start-dev --import-realm`, takes far longer to accept requests than
+Postgres/Redis/RustFS do. Pick each healthcheck from what the image
+actually ships — verify with `docker run`/`docker compose up` against
+the real pinned image rather than assuming a tool (`curl`, `wget`) is
+present; `keycloak/compose.yml`'s healthcheck uses bash's `/dev/tcp`
+instead of `curl` because the official Keycloak image ships neither
+`curl` nor `wget`.
+
+## Configuration
+
+Every stack service's own local-dev-only default credentials (Postgres,
+RustFS, Keycloak's admin/test users, ...) live in a `<service>.env` file
+inside that service's own subdirectory here — the single source of
+truth for that service's values, tracked in git since these are
+dev-only defaults, not real secrets (each service's `README.md` says
+so). That fragment's own `compose.yml` loads its file via `env_file:`
+directly into the service's container. Where `api` needs those same
+values (`../compose.yml`), it lists the same per-service files under its
+own `env_file:` — never re-pins the values a second time; see
+`../../src/app/README.md`'s "Configuration" section for how `app.config`
+assembles them into the settings the app itself reads.
+
 ## Do
 
 - Give a new service its own subdirectory following this same
@@ -26,10 +75,9 @@ fragment's own header comment.
   credentials or other config values to hold.
 - Give the service a `healthcheck:`, and add a matching `depends_on:
   <service>: condition: service_healthy` entry to `api` in
-  `../compose.yml` — see CLAUDE.md's "Devcontainer stack pattern"
-  section for why, and verify the healthcheck command against the real
-  pinned image before trusting it (don't assume `curl`/`wget` are
-  present).
+  `../compose.yml` — see "Devcontainer stack pattern" above for why, and
+  verify the healthcheck command against the real pinned image before
+  trusting it (don't assume `curl`/`wget` are present).
 - Let it join the default network compose generates for this project —
   don't declare a `networks:` block; every service reaches every other
   one by its service name already.

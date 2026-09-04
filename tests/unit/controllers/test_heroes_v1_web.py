@@ -53,4 +53,4 @@ def test_v1_form_page_carries_deprecation_headers(authed: None) -> None:
     assert response.status_code == 200
     assert response.headers["Deprecation"] == "true"
     assert "Sunset" in response.headers
-    assert response.headers["Link"] == '</v2/heroes>; rel="sunset"'
+    assert response.headers["Link"] == '</v2/heroes/form>; rel="sunset"'

@@ -26,5 +26,5 @@ router = build_web_router(
     crud_dependency=HeroV1CRUD,
     read_roles=ReadRoles,
     write_roles=WriteRoles,
-    router_dependencies=[Depends(sunset(SUNSET_AT, link="/v2/heroes"))],
+    router_dependencies=[Depends(sunset(SUNSET_AT, link="/v2/heroes/form"))],
 )

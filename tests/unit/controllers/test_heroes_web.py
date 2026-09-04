@@ -39,6 +39,19 @@ def test_submit_hero_form_creates_a_hero_and_redirects(authed: None) -> None:
         del app.dependency_overrides[get_hero_crud]
 
 
+def test_submit_hero_form_missing_field_returns_422(authed: None) -> None:
+    """POST /v2/heroes/form with a missing required field returns 422, not 500."""
+    repository = InMemoryRepository(HeroModel)
+    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
+        schema=Hero, repository=repository
+    )
+    try:
+        response = client.post("/v2/heroes/form", data={"name": "Batman"})
+        assert response.status_code == 422
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+
+
 def test_hero_components_js_defines_custom_elements() -> None:
     """GET /v2/heroes/components.js serves the web-component JS, unauthenticated."""
     response = client.get("/v2/heroes/components.js")

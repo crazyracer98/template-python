@@ -16,8 +16,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.web_components import render_crud_component_js, render_crud_form
 from app.xml_codec import from_xml, is_list_annotation, to_xml
@@ -230,7 +231,11 @@ def build_web_router[CreateT: BaseModel](
             data[field] = (
                 [v.strip() for v in raw.split(",") if v.strip()] if field in list_fields else raw
             )
-        await crud.create(create_schema.model_validate(data))
+        try:
+            validated = create_schema.model_validate(data)
+        except ValidationError as exc:
+            raise RequestValidationError(exc.errors()) from exc
+        await crud.create(validated)
         return _with_dependency_headers(
             response, RedirectResponse(f"{api_base}/form", status_code=status.HTTP_303_SEE_OTHER)
         )

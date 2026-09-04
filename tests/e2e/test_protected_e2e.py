@@ -2,35 +2,17 @@
 real Keycloak token and rejects a malformed one.
 """
 
-import httpx
+from collections.abc import Callable
+
 from playwright.sync_api import Page
 
-from app.config import get_settings
 
-
-def _fetch_access_token() -> str:
-    """Obtain a real access token for the dev realm's "viewer" user."""
-    settings = get_settings()
-    response = httpx.post(
-        settings.oidc_token_url,
-        data={
-            "grant_type": "password",
-            "client_id": settings.oidc_client_id,
-            "username": "viewer",
-            "password": "viewer",
-        },
-        timeout=10,
-    )
-    response.raise_for_status()
-    return response.json()["access_token"]  # type: ignore[no-any-return]
-
-
-def test_protected_accepts_a_real_keycloak_token(page: Page, base_url: str) -> None:
+def test_protected_accepts_a_real_keycloak_token(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
     """GET /protected with a real bearer token returns the subject claim."""
-    access_token = _fetch_access_token()
-
     response = page.request.get(
-        f"{base_url}/protected", headers={"Authorization": f"Bearer {access_token}"}
+        f"{base_url}/protected", headers={"Authorization": f"Bearer {access_token('viewer')}"}
     )
 
     assert response.ok

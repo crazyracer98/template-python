@@ -8,7 +8,7 @@ import os
 import shutil
 import subprocess
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -16,6 +16,8 @@ import httpx
 import pytest
 from playwright.sync_api import Browser, Playwright
 from selenium.webdriver import ChromeOptions, Remote
+
+from app.config import get_settings
 
 _STARTUP_TIMEOUT_SECONDS = 10.0
 
@@ -109,3 +111,26 @@ def browser(playwright: Playwright) -> Generator[Browser]:
             browser.close()
     finally:
         driver.quit()
+
+
+@pytest.fixture(scope="session")
+def access_token() -> Callable[[str], str]:
+    """Return a function that logs in a dev-realm user and returns their access token."""
+    settings = get_settings()
+
+    def _fetch(username: str) -> str:
+        """Log in `username` (dev-realm password == username) and return their access token."""
+        response = httpx.post(
+            settings.oidc_token_url,
+            data={
+                "grant_type": "password",
+                "client_id": settings.oidc_client_id,
+                "username": username,
+                "password": username,
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()["access_token"]  # type: ignore[no-any-return]
+
+    return _fetch

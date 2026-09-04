@@ -1,31 +1,13 @@
 """E2E smoke test: /heroes CRUD, through real Playwright requests against the live api."""
 
-import httpx
+from collections.abc import Callable
+
 from playwright.sync_api import Page
 
-from app.config import get_settings
 
-
-def _fetch_access_token() -> str:
-    """Obtain a real access token for the dev realm's "maintainer" user (full Hero CRUD)."""
-    settings = get_settings()
-    response = httpx.post(
-        settings.oidc_token_url,
-        data={
-            "grant_type": "password",
-            "client_id": settings.oidc_client_id,
-            "username": "maintainer",
-            "password": "maintainer",
-        },
-        timeout=10,
-    )
-    response.raise_for_status()
-    return response.json()["access_token"]  # type: ignore[no-any-return]
-
-
-def test_hero_crud_lifecycle(page: Page, base_url: str) -> None:
+def test_hero_crud_lifecycle(page: Page, base_url: str, access_token: Callable[[str], str]) -> None:
     """Create, list, get, update, and delete a hero, then confirm 404s past that point."""
-    headers = {"Authorization": f"Bearer {_fetch_access_token()}"}
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     create_response = page.request.post(
         f"{base_url}/heroes",
         data={"name": "Black Panther", "superpower": "Vibranium suit"},
@@ -73,12 +55,14 @@ def test_hero_crud_lifecycle(page: Page, base_url: str) -> None:
     assert missing_delete_response.status == 404
 
 
-def test_create_hero_with_missing_field_returns_422(page: Page, base_url: str) -> None:
+def test_create_hero_with_missing_field_returns_422(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
     """POST /heroes without the required superpower field returns a validation problem."""
     response = page.request.post(
         f"{base_url}/heroes",
         data={"name": "Nobody"},
-        headers={"Authorization": f"Bearer {_fetch_access_token()}"},
+        headers={"Authorization": f"Bearer {access_token('maintainer')}"},
         fail_on_status_code=False,
     )
     assert response.status == 422

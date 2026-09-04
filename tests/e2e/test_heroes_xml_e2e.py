@@ -1,14 +1,16 @@
 """E2E smoke test: /heroes/xml CRUD, through real Playwright requests against the live api."""
 
+from collections.abc import Callable
+
 from playwright.sync_api import Page
 
-from tests.e2e.test_heroes_e2e import _fetch_access_token
 
-
-def test_hero_xml_crud_lifecycle(page: Page, base_url: str) -> None:
+def test_hero_xml_crud_lifecycle(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
     """Create, list, get, update, and delete a hero through the XML routes."""
     headers = {
-        "Authorization": f"Bearer {_fetch_access_token()}",
+        "Authorization": f"Bearer {access_token('maintainer')}",
         "Content-Type": "application/xml",
     }
     create_response = page.request.post(
@@ -46,10 +48,12 @@ def test_hero_xml_crud_lifecycle(page: Page, base_url: str) -> None:
     assert missing_response.status == 404
 
 
-def test_hero_xml_update_missing_returns_404(page: Page, base_url: str) -> None:
+def test_hero_xml_update_missing_returns_404(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
     """PATCH /heroes/xml/{id} for a nonexistent id returns 404."""
     headers = {
-        "Authorization": f"Bearer {_fetch_access_token()}",
+        "Authorization": f"Bearer {access_token('maintainer')}",
         "Content-Type": "application/xml",
     }
     response = page.request.patch(
@@ -61,9 +65,11 @@ def test_hero_xml_update_missing_returns_404(page: Page, base_url: str) -> None:
     assert response.status == 404
 
 
-def test_hero_xml_delete_missing_returns_404(page: Page, base_url: str) -> None:
+def test_hero_xml_delete_missing_returns_404(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
     """DELETE /heroes/xml/{id} for a nonexistent id returns 404."""
-    headers = {"Authorization": f"Bearer {_fetch_access_token()}"}
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     response = page.request.delete(
         f"{base_url}/heroes/xml/999999", headers=headers, fail_on_status_code=False
     )

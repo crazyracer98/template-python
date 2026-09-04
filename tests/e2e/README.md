@@ -30,6 +30,14 @@ to produce one coverage report against the same 95% floor as `../unit/`
 exercises through a real HTTP request stays uncovered here even if
 `../unit/`/`../integration/` cover it directly.
 
+Besides the format-regression files at this level (`test_health_e2e.py`,
+`test_heroes_e2e.py`/`test_heroes_xml_e2e.py`/`test_heroes_web_e2e.py`,
+`test_protected_e2e.py`), one subdirectory per Keycloak client role —
+`viewer/`, `editor/`, `maintainer/`, `security/`, `detective/` (see
+`.devcontainer/stack/keycloak/realm-export.json`) — holds a single journey
+test walking through what that role can and can't do end-to-end, using the
+shared `access_token` fixture (`conftest.py`) to log in as it.
+
 ## Do
 
 - Run these from the devcontainer's own terminal, same as `../unit/` and
@@ -41,6 +49,9 @@ exercises through a real HTTP request stays uncovered here even if
 
 - Use the `base_url` fixture (from `conftest.py`) rather than
   hardcoding `http://api:8000`.
+- Use the `access_token` fixture (from `conftest.py`) to log in as a
+  dev-realm user rather than adding another local
+  `_fetch_access_token()`-style helper.
 - Reach the real `api` service — that's the point of this directory,
   unlike `../unit/`.
 

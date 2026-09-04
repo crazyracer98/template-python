@@ -1,13 +1,15 @@
 """E2E smoke test: /heroes/form and /heroes/components.js against the live api."""
 
+from collections.abc import Callable
+
 from playwright.sync_api import Page
 
-from tests.e2e.test_heroes_e2e import _fetch_access_token
 
-
-def test_hero_form_serves_html_and_accepts_a_submission(page: Page, base_url: str) -> None:
+def test_hero_form_serves_html_and_accepts_a_submission(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
     """GET /heroes/form serves HTML; POSTing to it creates a hero and redirects back."""
-    headers = {"Authorization": f"Bearer {_fetch_access_token()}"}
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
 
     form_response = page.request.get(f"{base_url}/heroes/form", headers=headers)
     assert form_response.ok

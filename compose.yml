@@ -1,0 +1,63 @@
+# Runner-image smoke-test stack: builds and runs the same `runner` stage
+# `release.yml` ships, against the stack's real backing services, so CI can
+# confirm /health/live and /health/ready before a release ships. Distinct
+# from .devcontainer/compose.yml (which runs the `develop` stage and is
+# never referenced by devcontainer.json) -- selenium is left out since
+# nothing here needs a browser driver.
+include:
+  - ./.devcontainer/stack/postgres/compose.yml
+  - ./.devcontainer/stack/s3/compose.yml
+  - ./.devcontainer/stack/keycloak/compose.yml
+  - ./.devcontainer/stack/redis/compose.yml
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    env_file:
+      - ./.devcontainer/stack/postgres/postgres.env
+      - ./.devcontainer/stack/s3/s3.env
+      - ./.devcontainer/stack/keycloak/keycloak.env
+    environment:
+      # Fixed in-network hostnames/ports, not credentials -- same values
+      # .devcontainer/compose.yml sets literally. No MODE override: the
+      # runner stage's own ENV MODE=production default (Dockerfile) is
+      # exactly what this smoke test wants to exercise against real
+      # dependencies, not MODE=mock's in-memory fakes.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      S3_ENDPOINT_URL: http://s3:9000
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    # No curl/wget in the runner image (slim base, nothing installed beyond
+    # the venv -- see scripts/runner-setup.sh), so this shells out to the
+    # venv's own Python instead. A non-2xx response (e.g. 503 while a
+    # dependency is still starting) raises HTTPError, a nonzero exit.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      # Covers Alembic migrations plus Keycloak's own startup budget
+      # (~2 minutes worst case -- see stack/keycloak/compose.yml).
+      start_period: 150s
+    ports:
+      # The one deliberate deviation from stack/README.md's "no ports:"
+      # rule: that rule is for fragments under .devcontainer/ reached only
+      # from sibling containers. This file lives outside .devcontainer/ and
+      # exists to be curled from the GitHub Actions runner (host).
+      - "8000:8000"

@@ -1,0 +1,41 @@
+# Runner-image smoke test: builds the runner stage from the root
+# compose.yml and confirms /health/live and /health/ready both return 200
+# against the real backing services, before a release ships.
+name: Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      # Unique per run so concurrent runs never collide on
+      # container/volume/network names -- same reasoning as checks.yml.
+      - name: Set compose project name
+        run: echo "COMPOSE_PROJECT_NAME=smoke-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
+      - name: Build and start stack
+        run: docker compose -f compose.yml up -d --build --wait --wait-timeout 300
+
+      - name: Confirm health endpoints
+        run: |
+          curl -fsS http://localhost:8000/health/live
+          curl -fsS http://localhost:8000/health/ready
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f compose.yml logs
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f compose.yml -p "$COMPOSE_PROJECT_NAME" down --volumes --remove-orphans

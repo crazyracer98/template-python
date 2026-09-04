@@ -24,6 +24,9 @@ setup composed from independent, swappable pieces.
 - `docs/` — knowledge about what the app does.
 - `.secrets/` — local secret files, never committed; see its `README.md`.
 - `Dockerfile` — three build stages: `develop`, `builder`, `runner`.
+- `compose.yml` — runner-image smoke-test stack (distinct from
+  `.devcontainer/compose.yml`); see `.github/workflows/README.md`'s
+  `smoke.yml` entry.
 - `pyproject.toml` / `uv.lock` — dependencies, managed with `uv`, pinned
   to exact patch versions.
 - `.pre-commit-config.yaml` — git hooks, run by `prek` or `pre-commit`.

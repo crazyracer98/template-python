@@ -1,5 +1,8 @@
 # template-fastapi
 
+> [!NOTE]
+> This repository is vibe coded with [Claude](https://claude.com/product/claude-code).
+
 A template repository for FastAPI projects, built around a devcontainer
 setup composed from independent, swappable pieces.
 

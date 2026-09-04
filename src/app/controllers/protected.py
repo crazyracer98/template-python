@@ -17,7 +17,8 @@ router = APIRouter(tags=["protected"])
 
 
 @router.get(
-    "/protected", dependencies=[Depends(sunset(datetime(2027, 1, 1, tzinfo=UTC), link="/heroes"))]
+    "/protected",
+    dependencies=[Depends(sunset(datetime(2027, 1, 1, tzinfo=UTC), link="/v2/heroes"))],
 )
 async def protected(
     claims: Annotated[dict[str, Any], Depends(get_current_claims)],

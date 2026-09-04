@@ -19,13 +19,14 @@ router = APIRouter(prefix="/heroes", tags=["heroes"])
 
 _FIELDS = ("name", "powers")
 _LIST_FIELDS = ("powers",)
+_API_BASE = "/v2/heroes"
 
 
 @router.get("/form", dependencies=[ReadRoles])
 async def hero_form() -> Response:
     """Serve the zero-JS Hero form + web-component demo page."""
     return Response(
-        content=render_crud_form("hero", _FIELDS, "/heroes"),
+        content=render_crud_form("hero", _FIELDS, _API_BASE),
         media_type="text/html",
     )
 
@@ -42,13 +43,13 @@ async def submit_hero_form(
             name=name, powers=[power.strip() for power in powers.split(",") if power.strip()]
         )
     )
-    return RedirectResponse("/heroes/form", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(f"{_API_BASE}/form", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/components.js")
 async def hero_components_js() -> Response:
     """Serve the vanilla-JS custom elements for the Hero resource."""
     return Response(
-        content=render_crud_component_js("hero", "/heroes", _FIELDS, list_fields=_LIST_FIELDS),
+        content=render_crud_component_js("hero", _API_BASE, _FIELDS, list_fields=_LIST_FIELDS),
         media_type="application/javascript",
     )

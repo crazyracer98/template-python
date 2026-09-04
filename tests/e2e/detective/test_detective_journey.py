@@ -17,7 +17,7 @@ def test_detective_can_cross_reference_audit_and_heroes(
     assert audit_response.json()["roles"] == ["detective"]
 
     create_response = page.request.post(
-        f"{base_url}/heroes",
+        f"{base_url}/v2/heroes",
         data={"name": "Jessica Jones", "powers": ["Super strength"]},
         headers=maintainer_headers,
     )
@@ -25,15 +25,15 @@ def test_detective_can_cross_reference_audit_and_heroes(
     hero_id = create_response.json()["id"]
 
     try:
-        list_response = page.request.get(f"{base_url}/heroes", headers=headers)
+        list_response = page.request.get(f"{base_url}/v2/heroes", headers=headers)
         assert list_response.ok
         assert any(hero["id"] == hero_id for hero in list_response.json())
 
-        get_response = page.request.get(f"{base_url}/heroes/{hero_id}", headers=headers)
+        get_response = page.request.get(f"{base_url}/v2/heroes/{hero_id}", headers=headers)
         assert get_response.ok
 
         forbidden_create_response = page.request.post(
-            f"{base_url}/heroes",
+            f"{base_url}/v2/heroes",
             data={"name": "Nobody", "powers": ["None"]},
             headers=headers,
             fail_on_status_code=False,
@@ -41,7 +41,7 @@ def test_detective_can_cross_reference_audit_and_heroes(
         assert forbidden_create_response.status == 403
 
         update_response = page.request.patch(
-            f"{base_url}/heroes/{hero_id}",
+            f"{base_url}/v2/heroes/{hero_id}",
             data={"powers": ["None"]},
             headers=headers,
             fail_on_status_code=False,
@@ -49,8 +49,8 @@ def test_detective_can_cross_reference_audit_and_heroes(
         assert update_response.status == 403
 
         delete_response = page.request.delete(
-            f"{base_url}/heroes/{hero_id}", headers=headers, fail_on_status_code=False
+            f"{base_url}/v2/heroes/{hero_id}", headers=headers, fail_on_status_code=False
         )
         assert delete_response.status == 403
     finally:
-        page.request.delete(f"{base_url}/heroes/{hero_id}", headers=maintainer_headers)
+        page.request.delete(f"{base_url}/v2/heroes/{hero_id}", headers=maintainer_headers)

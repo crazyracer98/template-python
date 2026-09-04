@@ -10,7 +10,18 @@ from fastapi import FastAPI
 
 from alembic import command
 from app.config import get_settings
-from app.controllers import audit, health, heroes, heroes_web, heroes_xml, mock, protected
+from app.controllers import (
+    audit,
+    health,
+    heroes,
+    heroes_v1,
+    heroes_v1_web,
+    heroes_v1_xml,
+    heroes_web,
+    heroes_xml,
+    mock,
+    protected,
+)
 from app.problem_details import register_problem_handlers
 from app.telemetry import configure_logging
 
@@ -97,9 +108,12 @@ app = FastAPI(
 register_problem_handlers(app)
 
 app.include_router(health.router)
-app.include_router(heroes.router)
-app.include_router(heroes_xml.router)
-app.include_router(heroes_web.router)
+app.include_router(heroes.router, prefix="/v2")
+app.include_router(heroes_xml.router, prefix="/v2")
+app.include_router(heroes_web.router, prefix="/v2")
+app.include_router(heroes_v1.router, prefix="/v1")
+app.include_router(heroes_v1_xml.router, prefix="/v1")
+app.include_router(heroes_v1_web.router, prefix="/v1")
 app.include_router(protected.router)
 app.include_router(audit.router)
 _mount_mode_specific_routers(app, settings.mode)

@@ -6,10 +6,13 @@ import from any other `app/` subpackage, but nothing else may import
 from here (see `../README.md`'s "Layering" section).
 
 - `health.py` — `/health/live` and `/health/ready`.
-- `heroes.py` — `/heroes`, the example CRUD resource; see `../README.md`'s
-  "Example CRUD resource: Hero".
+- `heroes.py` — `/v2/heroes`, the example CRUD resource; see
+  `../README.md`'s "Example CRUD resource: Hero".
 - `heroes_xml.py` / `heroes_web.py` — sibling routers on `heroes.py`'s
-  `/heroes` resource, see "Multi-format CRUD" below.
+  `/v2/heroes` resource, see "Multi-format CRUD" below.
+- `heroes_v1.py` / `heroes_v1_xml.py` / `heroes_v1_web.py` — the
+  deprecated `/v1/heroes*` sibling version, see "API and model
+  versioning" below.
 - `protected.py` — `/protected`, a minimal example of `Depends
   (get_current_claims)`.
 
@@ -36,6 +39,31 @@ could otherwise collide with a resource's `/{id}` route (e.g.
 `/heroes/xml`) needs that id parameter typed as `{id:int}` — Starlette's
 typed path converter, so a non-integer literal segment never matches it,
 regardless of router registration order.
+
+## API and model versioning
+
+A resource's routes are mounted under a `/v{N}` path prefix at
+`include_router` time in `app.main` — `/v2/heroes*` for the current
+Hero shape, `/v1/heroes*` for the deprecated one. There is no bare
+unversioned alias; callers pick a version explicitly. The DB model
+(`app.models`) always represents the *current* shape only — an older
+API version is a `views` + `crud` concern, never a second table/model
+(see `docs/adrs/0002-api-and-model-versioning.md`).
+
+A deprecated version follows the `*_vN.py` pattern: a `views/hero_vN.py`
+module defining that version's Pydantic shape plus pure converter
+functions to/from the current version's views (see
+`app.views.hero_v1`), and a sibling controller set
+(`heroes_v1.py`/`heroes_v1_xml.py`/`heroes_v1_web.py`) that mirrors the
+current version's — the same sibling-router reuse "Multi-format CRUD"
+above already uses, just versioned instead of format-varied.
+`app.crud.compat.CompatCRUD` is the reusable wrapper that adapts the
+current version's `CRUDInterface` to speak in the deprecated view's
+shape, so the deprecated router needs no new persistence wiring — see
+`app.crud.README.md`. Apply `app.http_headers.sunset(...)` once as a
+`dependencies=[...]` entry on the deprecated router itself (not per
+route) so every route under it advertises `Sunset`/`Deprecation`/`Link`
+headers at once, pointing at the current version's path.
 
 ## Do
 

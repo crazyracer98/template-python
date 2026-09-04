@@ -179,7 +179,7 @@ own timestamps.
 ## Example CRUD resource: Hero
 
 `models/hero.py` / `views/hero.py` / `controllers/heroes.py` are a
-worked example of the generic CRUD interface, wired up as `/heroes`
+worked example of the generic CRUD interface, wired up as `/v2/heroes`
 (list/create/get/update/delete — see `controllers/heroes.py`). Adding
 another resource follows the same three-file shape: an `IdentifiedBase`
 subclass in `models/`, an `ORMView` subclass (plus `*Create`/`*Update`
@@ -187,6 +187,12 @@ variants) in `views/`, and a router in `controllers/` that builds a
 `CRUDInterface(schema=<View>, repository=SQLAlchemyRepository(session,
 <Model>))` per request — see `crud/README.md` and
 `repositories/README.md` for what each side of that call does.
+
+Hero also carries a deprecated `/v1/heroes` sibling version, backed by
+the same data — see `controllers/README.md`'s "API and model
+versioning" and `docs/adrs/0002-api-and-model-versioning.md` for the
+path-prefix versioning convention any future breaking resource change
+follows.
 
 ## Do
 

@@ -11,6 +11,12 @@ router that wires the two through `CRUDInterface`.
   support (see `app.views.base.ORMView`) — this module has no
   resource-specific code and imports nothing from `app.views` or
   `app.repositories` beyond their base types.
+- `compat.py` — `CompatCRUD`, a generic wrapper that adapts a current
+  `CRUDInterface` to speak in terms of an older (deprecated) API
+  version's view, via caller-supplied converter functions. The building
+  block for a resource that's grown a deprecated version — see
+  `../controllers/README.md`'s "API and model versioning" and
+  `docs/adrs/0002-api-and-model-versioning.md`.
 
 ## Do
 

@@ -1,4 +1,4 @@
-"""Unit test: /v2/heroes/xml CRUD routes, with the Hero repository faked out."""
+"""Unit test: /v1/heroes/xml CRUD routes -- the deprecated single-power Hero shape, in XML."""
 
 from fastapi.testclient import TestClient
 
@@ -12,56 +12,57 @@ from app.views.hero import Hero
 client = TestClient(app)
 
 
-def test_hero_xml_crud_lifecycle(authed: None) -> None:
-    """Create, list, get, update, and delete a hero through the XML routes."""
+def test_hero_v1_xml_crud_lifecycle(authed: None) -> None:
+    """Create, list, get, update, and delete a hero through the v1 XML routes."""
     repository = InMemoryRepository(HeroModel)
     app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
         schema=Hero, repository=repository
     )
     try:
         create_response = client.post(
-            "/v2/heroes/xml",
-            content="<hero><name>Spider-Man</name><powers>Wall-crawling</powers></hero>",
+            "/v1/heroes/xml",
+            content="<hero><name>Spider-Man</name><superpower>Wall-crawling</superpower></hero>",
             headers={"Content-Type": "application/xml"},
         )
         assert create_response.status_code == 201
         assert create_response.headers["content-type"] == "application/xml"
         assert "<name>Spider-Man</name>" in create_response.text
+        assert "<superpower>Wall-crawling</superpower>" in create_response.text
 
-        list_response = client.get("/v2/heroes/xml")
+        list_response = client.get("/v1/heroes/xml")
         assert list_response.status_code == 200
         assert "<heroes>" in list_response.text
         hero_id = list_response.text.split("<id>")[1].split("</id>")[0]
 
-        get_response = client.get(f"/v2/heroes/xml/{hero_id}")
+        get_response = client.get(f"/v1/heroes/xml/{hero_id}")
         assert get_response.status_code == 200
         assert "<name>Spider-Man</name>" in get_response.text
 
         update_response = client.patch(
-            f"/v2/heroes/xml/{hero_id}",
-            content="<hero><powers>Web-slinging</powers><powers>Wall-crawling</powers></hero>",
+            f"/v1/heroes/xml/{hero_id}",
+            content="<hero><superpower>Web-slinging</superpower></hero>",
             headers={"Content-Type": "application/xml"},
         )
         assert update_response.status_code == 200
-        assert "<powers>Web-slinging</powers><powers>Wall-crawling</powers>" in update_response.text
+        assert "<superpower>Web-slinging</superpower>" in update_response.text
 
-        delete_response = client.delete(f"/v2/heroes/xml/{hero_id}")
+        delete_response = client.delete(f"/v1/heroes/xml/{hero_id}")
         assert delete_response.status_code == 204
 
-        missing_response = client.get(f"/v2/heroes/xml/{hero_id}")
+        missing_response = client.get(f"/v1/heroes/xml/{hero_id}")
         assert missing_response.status_code == 404
     finally:
         del app.dependency_overrides[get_hero_crud]
 
 
-def test_hero_xml_update_missing_returns_404(authed: None) -> None:
-    """PATCH /v2/heroes/xml/{id} for a nonexistent id returns 404."""
+def test_hero_v1_xml_update_missing_returns_404(authed: None) -> None:
+    """PATCH /v1/heroes/xml/{id} for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
         schema=Hero, repository=InMemoryRepository(HeroModel)
     )
     try:
         response = client.patch(
-            "/v2/heroes/xml/999",
+            "/v1/heroes/xml/999",
             content="<hero><name>Nobody</name></hero>",
             headers={"Content-Type": "application/xml"},
         )
@@ -70,13 +71,13 @@ def test_hero_xml_update_missing_returns_404(authed: None) -> None:
     assert response.status_code == 404
 
 
-def test_hero_xml_delete_missing_returns_404(authed: None) -> None:
-    """DELETE /v2/heroes/xml/{id} for a nonexistent id returns 404."""
+def test_hero_v1_xml_delete_missing_returns_404(authed: None) -> None:
+    """DELETE /v1/heroes/xml/{id} for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
         schema=Hero, repository=InMemoryRepository(HeroModel)
     )
     try:
-        response = client.delete("/v2/heroes/xml/999")
+        response = client.delete("/v1/heroes/xml/999")
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404

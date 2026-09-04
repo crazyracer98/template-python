@@ -1,4 +1,4 @@
-"""Unit test: /heroes CRUD routes, with the Hero repository faked out."""
+"""Unit test: /v2/heroes CRUD routes, with the Hero repository faked out."""
 
 from fastapi.testclient import TestClient
 
@@ -28,77 +28,77 @@ def test_hero_crud_lifecycle(authed: None) -> None:
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(repository)
     try:
         create_response = client.post(
-            "/heroes", json={"name": "Spider-Man", "powers": ["Wall-crawling"]}
+            "/v2/heroes", json={"name": "Spider-Man", "powers": ["Wall-crawling"]}
         )
         assert create_response.status_code == 201
         hero_id = create_response.json()["id"]
 
-        list_response = client.get("/heroes")
+        list_response = client.get("/v2/heroes")
         assert list_response.status_code == 200
         assert len(list_response.json()) == 1
 
-        get_response = client.get(f"/heroes/{hero_id}")
+        get_response = client.get(f"/v2/heroes/{hero_id}")
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Spider-Man"
 
-        update_response = client.patch(f"/heroes/{hero_id}", json={"powers": ["Web-slinging"]})
+        update_response = client.patch(f"/v2/heroes/{hero_id}", json={"powers": ["Web-slinging"]})
         assert update_response.status_code == 200
         assert update_response.json()["powers"] == ["Web-slinging"]
 
-        delete_response = client.delete(f"/heroes/{hero_id}")
+        delete_response = client.delete(f"/v2/heroes/{hero_id}")
         assert delete_response.status_code == 204
 
-        missing_response = client.get(f"/heroes/{hero_id}")
+        missing_response = client.get(f"/v2/heroes/{hero_id}")
         assert missing_response.status_code == 404
     finally:
         del app.dependency_overrides[get_hero_crud]
 
 
 def test_get_missing_hero_returns_404(authed: None) -> None:
-    """GET /heroes/{id} for a nonexistent id returns 404."""
+    """GET /v2/heroes/{id} for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.get("/heroes/999")
+        response = client.get("/v2/heroes/999")
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_update_missing_hero_returns_404(authed: None) -> None:
-    """PATCH /heroes/{id} for a nonexistent id returns 404."""
+    """PATCH /v2/heroes/{id} for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.patch("/heroes/999", json={"name": "Nobody"})
+        response = client.patch("/v2/heroes/999", json={"name": "Nobody"})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_delete_missing_hero_returns_404(authed: None) -> None:
-    """DELETE /heroes/{id} for a nonexistent id returns 404."""
+    """DELETE /v2/heroes/{id} for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.delete("/heroes/999")
+        response = client.delete("/v2/heroes/999")
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_hero_routes_require_auth() -> None:
-    """GET /heroes with no Authorization header is rejected with 401."""
-    response = client.get("/heroes")
+    """GET /v2/heroes with no Authorization header is rejected with 401."""
+    response = client.get("/v2/heroes")
     assert response.status_code == 401
 
 
 def test_hero_create_requires_write_role() -> None:
-    """POST /heroes with only the viewer role is rejected with 403."""
+    """POST /v2/heroes with only the viewer role is rejected with 403."""
     settings = get_settings()
     app.dependency_overrides[get_current_claims] = lambda: {
         "sub": "viewer-user",
         "resource_access": {settings.oidc_client_id: {"roles": ["viewer"]}},
     }
     try:
-        response = client.post("/heroes", json={"name": "X", "powers": ["Y"]})
+        response = client.post("/v2/heroes", json={"name": "X", "powers": ["Y"]})
     finally:
         del app.dependency_overrides[get_current_claims]
     assert response.status_code == 403

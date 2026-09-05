@@ -80,7 +80,7 @@ jobs:
 
       - name: Log in to OCI registry
         if: vars.OCI_REGISTRY != ''
-        uses: docker/login-action@v4.5.0
+        uses: docker/login-action@v4.6.0
         with:
           registry: ${{ vars.OCI_REGISTRY }}
           username: ${{ secrets.OCI_REGISTRY_USERNAME }}

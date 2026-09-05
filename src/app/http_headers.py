@@ -30,6 +30,20 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 # below for the older header's wider browser support).
 _CONTENT_SECURITY_POLICY = "default-src 'self'; frame-ancestors 'none'"
 
+# FastAPI's built-in /docs and /redoc pages pull Swagger UI/Redoc from
+# cdn.jsdelivr.net and run inline <script>/<style> tags -- the strict
+# default-src above blocks all of that, leaving the page blank. These two
+# paths get a relaxed policy instead of exempting them from CSP entirely.
+_DOCS_PATHS = {"/docs", "/redoc"}
+_DOCS_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; "
+    "img-src 'self' data: fastapi.tiangolo.com; "
+    "font-src fonts.gstatic.com; "
+    "frame-ancestors 'none'"
+)
+
 
 def sunset(at: datetime, *, link: str | None = None) -> Callable[[Response], None]:
     """Build a dependency that sets Sunset/Deprecation (and optionally Link) headers.
@@ -73,7 +87,11 @@ class _SecurityHeadersMiddleware:
         async def _send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
-                headers["Content-Security-Policy"] = _CONTENT_SECURITY_POLICY
+                headers["Content-Security-Policy"] = (
+                    _DOCS_CONTENT_SECURITY_POLICY
+                    if scope["path"] in _DOCS_PATHS
+                    else _CONTENT_SECURITY_POLICY
+                )
                 headers["X-Frame-Options"] = "DENY"
                 headers["X-Content-Type-Options"] = "nosniff"
             await send(message)

@@ -47,3 +47,28 @@ def test_add_security_headers_covers_error_responses_too() -> None:
     response = TestClient(app).get("/does-not-exist")
     assert response.status_code == 404
     assert response.headers["X-Frame-Options"] == "DENY"
+
+
+def test_docs_page_gets_a_relaxed_csp_that_allows_swagger_ui_assets() -> None:
+    """/docs needs jsdelivr script/style + inline tags, so it gets its own CSP."""
+    app = FastAPI()
+    add_security_headers(app)
+    response = TestClient(app).get("/docs")
+    csp = response.headers["Content-Security-Policy"]
+    assert "cdn.jsdelivr.net" in csp
+    assert "'unsafe-inline'" in csp
+    assert "frame-ancestors 'none'" in csp
+
+
+def test_other_routes_keep_the_strict_csp_even_when_docs_is_relaxed() -> None:
+    """Relaxing /docs must not weaken the default policy for every other route."""
+    app = FastAPI()
+
+    @app.get("/ok")
+    def ok() -> dict[str, bool]:
+        return {"ok": True}
+
+    add_security_headers(app)
+    response = TestClient(app).get("/ok")
+    csp = response.headers["Content-Security-Policy"]
+    assert csp == "default-src 'self'; frame-ancestors 'none'"

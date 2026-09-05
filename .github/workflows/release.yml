@@ -50,13 +50,13 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.1.0
+        uses: docker/setup-buildx-action@v4.3.0
 
       # Attached to the GitHub release below regardless of whether an OCI
       # registry is configured below -- a portable, offline-loadable
       # artifact (`docker load --input`) of exactly what was released.
       - name: Build runner image (OCI tarball)
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           target: runner
@@ -80,7 +80,7 @@ jobs:
 
       - name: Log in to OCI registry
         if: vars.OCI_REGISTRY != ''
-        uses: docker/login-action@v4.5.0
+        uses: docker/login-action@v4.6.0
         with:
           registry: ${{ vars.OCI_REGISTRY }}
           username: ${{ secrets.OCI_REGISTRY_USERNAME }}
@@ -88,7 +88,7 @@ jobs:
 
       - name: Push runner image to OCI registry
         if: vars.OCI_REGISTRY != ''
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           target: runner

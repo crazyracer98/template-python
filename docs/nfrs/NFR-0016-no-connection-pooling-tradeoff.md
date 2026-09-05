@@ -21,4 +21,6 @@ Developers; performance/operations. Implemented and documented in
 ## Verification
 
 Code review against the documented rationale before changing the
-pool class; no automated performance check exists today.
+pool class, plus `tests/perf/` (`NFR-0024`) as an automated signal that
+would catch a pooling-related latency/throughput regression, even if it
+doesn't verify the trade-off's rationale itself.

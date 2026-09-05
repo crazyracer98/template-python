@@ -97,6 +97,9 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+
+# Locust load test reports (tests/perf/README.md)
+tests/perf/.results/
 *.py,cover
 .hypothesis/
 .pytest_cache/

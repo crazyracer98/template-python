@@ -1,6 +1,6 @@
 # tests/
 
-Pytest tests, split into three independent suites:
+Four independent suites:
 
 - `unit/` — no external services; mirrors `src/app/`'s structure.
 - `integration/` — reaches the real stack containers (already
@@ -9,10 +9,14 @@ Pytest tests, split into three independent suites:
 - `e2e/` — Playwright tests against the live `api` service, driving a
   browser in the `selenium` stack container remotely; see its own
   `README.md`.
+- `perf/` — a Locust load test against the `runner` image over the real
+  stack; not `pytest`-based at all (Locust has its own headless runner)
+  — see its own `README.md`.
 
 A plain `pytest` run collects `unit/` and `integration/` (both work
-inside the devcontainer / CI as-is) and ignores `e2e/` (see
-`pyproject.toml`'s `addopts`).
+inside the devcontainer / CI as-is) and ignores `e2e/` and `perf/` (see
+`pyproject.toml`'s `addopts`); `perf/` is never collected by `pytest` at
+all, under any invocation.
 
 Test code is type-checked under the same `mypy --strict` settings as
 `src/` — the hook runs `uv run mypy src tests` — so tests carry full
@@ -21,7 +25,11 @@ annotations too (ruff's `ANN` rules enforce the same).
 Both that run and `uv run pytest tests/e2e` independently enforce 100%
 coverage of `src/app` (see `[tool.coverage.report]` in `pyproject.toml`)
 — e2e's coverage comes from the live `api` subprocess, not from the test
-process itself; see `e2e/README.md`.
+process itself; see `e2e/README.md`. `perf/` is exempt from that gate
+entirely, the same way `e2e/` would be if it weren't itself measured:
+Locust isn't `pytest`/`coverage.py`-instrumented, and it only exercises
+what's deliberately scripted, so it was never a candidate for the 100%
+floor in the first place; see `perf/README.md`.
 
 An `async def test_...` runs with no `@pytest.mark.asyncio` marker
 needed (`asyncio_mode = "auto"` in `[tool.pytest.ini_options]`), and

@@ -75,6 +75,18 @@ services:
     depends_on:
       keycloak-tls-cert:
         condition: service_completed_successfully
+    ports:
+      # Second deliberate deviation from stack/README.md's "no ports:" rule
+      # (see api's own ports: below) -- tests/perf/locustfile.py logs in with
+      # a real password grant from outside the compose network (the GitHub
+      # Actions runner, or a developer's shell reproducing perf.yml locally),
+      # which needs a host route to Keycloak's token endpoint. Kept at the
+      # same 8443 the api service uses internally so the issued token's own
+      # `iss` claim (which echoes back whatever Host the client connected
+      # through) still matches OIDC_ISSUER_URL below, letting the same
+      # runner-image api process validate it -- perf.yml adds a `keycloak`
+      # /etc/hosts entry pointing at 127.0.0.1 for the same reason.
+      - "8443:8443"
 
   api:
     build:

@@ -15,7 +15,7 @@ def test_editor_can_create_and_update_but_not_delete(
 
     try:
         json_create_response = page.request.post(
-            f"{base_url}/v2/heroes",
+            f"{base_url}/crud/v1/heroes/v2/json",
             data={"name": "Black Widow", "powers": ["Espionage"]},
             headers=headers,
         )
@@ -24,7 +24,7 @@ def test_editor_can_create_and_update_but_not_delete(
         hero_ids.append(json_hero_id)
 
         update_response = page.request.patch(
-            f"{base_url}/v2/heroes",
+            f"{base_url}/crud/v1/heroes/v2/json",
             params={"id": json_hero_id},
             data={"powers": ["Master spy"]},
             headers=headers,
@@ -33,7 +33,7 @@ def test_editor_can_create_and_update_but_not_delete(
         assert update_response.json()["powers"] == ["Master spy"]
 
         xml_create_response = page.request.post(
-            f"{base_url}/v2/heroes/xml",
+            f"{base_url}/crud/v1/heroes/v2/xml",
             data="<hero><name>Hawkeye</name><powers>Marksmanship</powers></hero>",
             headers={**headers, "Content-Type": "application/xml"},
         )
@@ -42,7 +42,7 @@ def test_editor_can_create_and_update_but_not_delete(
         hero_ids.append(xml_hero_id)
 
         xml_update_response = page.request.patch(
-            f"{base_url}/v2/heroes/xml",
+            f"{base_url}/crud/v1/heroes/v2/xml",
             params={"id": xml_hero_id},
             data="<hero><powers>Precision archery</powers></hero>",
             headers={**headers, "Content-Type": "application/xml"},
@@ -51,13 +51,13 @@ def test_editor_can_create_and_update_but_not_delete(
         assert "<powers>Precision archery</powers>" in xml_update_response.text()
 
         form_response = page.request.post(
-            f"{base_url}/v2/heroes/form",
+            f"{base_url}/crud/v1/heroes/v2/web/form",
             form={"name": "Quicksilver", "powers": "Super speed"},
             headers=headers,
         )
         assert form_response.ok
 
-        list_response = page.request.get(f"{base_url}/v2/heroes", headers=headers)
+        list_response = page.request.get(f"{base_url}/crud/v1/heroes/v2/json", headers=headers)
         assert list_response.ok
         heroes = list_response.json()
         form_hero_id = next(hero["id"] for hero in heroes if hero["name"] == "Quicksilver")
@@ -66,7 +66,7 @@ def test_editor_can_create_and_update_but_not_delete(
         assert {json_hero_id, int(xml_hero_id), form_hero_id} <= listed_ids
 
         delete_response = page.request.delete(
-            f"{base_url}/v2/heroes",
+            f"{base_url}/crud/v1/heroes/v2/json",
             params={"id": json_hero_id},
             headers=headers,
             fail_on_status_code=False,
@@ -80,5 +80,7 @@ def test_editor_can_create_and_update_but_not_delete(
     finally:
         for hero_id in hero_ids:
             page.request.delete(
-                f"{base_url}/v2/heroes", params={"id": hero_id}, headers=maintainer_headers
+                f"{base_url}/crud/v1/heroes/v2/json",
+                params={"id": hero_id},
+                headers=maintainer_headers,
             )

@@ -23,7 +23,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # Every served HTML page (render_crud_form) loads its only script from the
-# same origin (`<script src="{list_endpoint}/components.js">`, never inline)
+# same origin (`<script src="{own_base}/components.js">`, never inline)
 # and defines no other resource type -- so a locked-down default-src covers
 # it without an `unsafe-inline`/`unsafe-eval` carve-out. frame-ancestors
 # 'none' is CSP's own equivalent of X-Frame-Options: DENY (set alongside it

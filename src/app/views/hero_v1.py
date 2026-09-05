@@ -3,7 +3,7 @@
 from pydantic import Field
 
 from app.views.base import IXDTFDatetime, ORMView
-from app.views.hero import Hero, HeroCreate, HeroUpdate
+from app.views.hero_v2 import HeroV2, HeroV2Create, HeroV2Update
 
 
 class HeroV1Base(ORMView):
@@ -32,7 +32,7 @@ class HeroV1(HeroV1Base):
     updated_at: IXDTFDatetime
 
 
-def hero_to_v1(hero: Hero) -> HeroV1:
+def hero_v2_to_v1(hero: HeroV2) -> HeroV1:
     """Convert a current (v2) Hero down to the deprecated v1 shape.
 
     v1 can only represent one power; the first entry in `powers` is treated
@@ -48,12 +48,12 @@ def hero_to_v1(hero: Hero) -> HeroV1:
     )
 
 
-def hero_v1_create_to_v2(payload: HeroV1Create) -> HeroCreate:
+def hero_v1_create_to_v2(payload: HeroV1Create) -> HeroV2Create:
     """Convert a v1 create payload up to the current (v2) shape."""
-    return HeroCreate(name=payload.name, powers=[payload.superpower])
+    return HeroV2Create(name=payload.name, powers=[payload.superpower])
 
 
-def hero_v1_update_to_v2(payload: HeroV1Update) -> HeroUpdate:
+def hero_v1_update_to_v2(payload: HeroV1Update) -> HeroV2Update:
     """Convert a v1 update payload up to the current (v2) shape.
 
     Only maps `superpower` -> `powers` when it was actually supplied -- an
@@ -63,4 +63,4 @@ def hero_v1_update_to_v2(payload: HeroV1Update) -> HeroUpdate:
     data = payload.model_dump(exclude_unset=True)
     if "superpower" in data:
         data["powers"] = [data.pop("superpower")]
-    return HeroUpdate.model_validate(data)
+    return HeroV2Update.model_validate(data)

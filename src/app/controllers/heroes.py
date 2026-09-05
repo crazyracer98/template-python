@@ -1,21 +1,27 @@
-"""HTTP routes for the Hero resource -- a worked example of the generic CRUD interface."""
+"""HTTP routes for the Hero resource -- a worked example of the generic CRUD interface.
+
+One `build_resource_router` call builds the JSON/XML/web sibling routes together
+under `/crud/v{ROUTER_VERSION}/heroes/v2/{json,xml,web}` -- see
+`crud_router.py`'s "Generic CRUD router factories" and
+docs/adrs/0009-...md`.
+"""
 
 from typing import Annotated
 
 from fastapi import Depends
 
-from app.controllers.crud_router import build_json_router
+from app.controllers.crud_router import ROUTER_VERSION, build_resource_router
 from app.crud.base import CRUDInterface
 from app.crud.dependency import build_repository_provider
 from app.models.base import DBSession
 from app.models.hero import Hero as HeroModel
 from app.oidc import require_roles
-from app.views.hero import Hero, HeroCreate, HeroUpdate
+from app.views.hero_v2 import HeroV2, HeroV2Create, HeroV2Update
 
 _hero_repository = build_repository_provider(HeroModel)
 
 
-def get_hero_crud(session: DBSession) -> CRUDInterface[Hero, HeroModel]:
+def get_hero_crud(session: DBSession) -> CRUDInterface[HeroV2, HeroModel]:
     """Build a request-scoped CRUD interface for Hero.
 
     MODE=mock uses the shared in-memory repository instead of `session` -- an
@@ -23,22 +29,26 @@ def get_hero_crud(session: DBSession) -> CRUDInterface[Hero, HeroModel]:
     harmless, uniform dependency across every mode rather than needing two
     differently-signatured variants of this function.
     """
-    return CRUDInterface(schema=Hero, repository=_hero_repository(session))
+    return CRUDInterface(schema=HeroV2, repository=_hero_repository(session))
 
 
-HeroCRUD = Annotated[CRUDInterface[Hero, HeroModel], Depends(get_hero_crud)]
+HeroCRUD = Annotated[CRUDInterface[HeroV2, HeroModel], Depends(get_hero_crud)]
 
 ReadRoles = Depends(require_roles("viewer", "editor", "maintainer", "detective"))
 WriteRoles = Depends(require_roles("editor", "maintainer"))
 DeleteRoles = Depends(require_roles("maintainer"))
 
-router = build_json_router(
-    prefix="/heroes",
+router = build_resource_router(
+    prefix=f"/crud/v{ROUTER_VERSION}/heroes/v2",
     tags=["heroes"],
     resource_label="Hero",
-    schema=Hero,
-    create_schema=HeroCreate,
-    update_schema=HeroUpdate,
+    resource="hero",
+    item_tag="hero",
+    list_tag="heroes",
+    fields=("name", "powers"),
+    schema=HeroV2,
+    create_schema=HeroV2Create,
+    update_schema=HeroV2Update,
     crud_dependency=HeroCRUD,
     read_roles=ReadRoles,
     write_roles=WriteRoles,

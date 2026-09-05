@@ -15,10 +15,6 @@ from app.controllers import (
     health,
     heroes,
     heroes_v1,
-    heroes_v1_web,
-    heroes_v1_xml,
-    heroes_web,
-    heroes_xml,
     mock,
     protected,
 )
@@ -115,12 +111,8 @@ register_problem_handlers(app)
 add_security_headers(app)
 
 app.include_router(health.router)
-app.include_router(heroes.router, prefix="/v2")
-app.include_router(heroes_xml.router, prefix="/v2")
-app.include_router(heroes_web.router, prefix="/v2")
-app.include_router(heroes_v1.router, prefix="/v1")
-app.include_router(heroes_v1_xml.router, prefix="/v1")
-app.include_router(heroes_v1_web.router, prefix="/v1")
+app.include_router(heroes.router)
+app.include_router(heroes_v1.router)
 app.include_router(protected.router)
 app.include_router(audit.router)
 _mount_mode_specific_routers(app, settings.mode)

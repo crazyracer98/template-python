@@ -6,13 +6,10 @@ import from any other `app/` subpackage, but nothing else may import
 from here (see `../README.md`'s "Layering" section).
 
 - `health.py` — `/health/live` and `/health/ready`.
-- `heroes.py` — `/v2/heroes`, the example CRUD resource; see
-  `../README.md`'s "Example CRUD resource: Hero".
-- `heroes_xml.py` / `heroes_web.py` — sibling routers on `heroes.py`'s
-  `/v2/heroes` resource, see "Multi-format CRUD" below.
-- `heroes_v1.py` / `heroes_v1_xml.py` / `heroes_v1_web.py` — the
-  deprecated `/v1/heroes*` sibling version, see "API and model
-  versioning" below.
+- `heroes.py` — `/crud/v1/heroes/v2/{json,xml,web}`, the example CRUD
+  resource; see `../README.md`'s "Example CRUD resource: Hero".
+- `heroes_v1.py` — the deprecated `/crud/v1/heroes/v1/{json,xml,web}`
+  sibling version, see "API and model versioning" below.
 - `protected.py` — `/protected`, a minimal example of `Depends
   (get_current_claims)`.
 
@@ -29,14 +26,17 @@ Add a role requirement to a route with `dependencies=[Depends
 `crud_router.py`'s `build_json_router`/`build_xml_router`/`build_web_router`
 build a resource's list/create/get/update/delete routes (or, for
 `build_web_router`, its `/form` + `/components.js` routes) internally, as
-closures over the Pydantic views and CRUD dependency passed to them —
-`heroes.py`/`heroes_xml.py`/`heroes_web.py` (and their `*_v1*` siblings)
-are one declarative call each, not hand-written route functions. Each
-factory takes `crud_dependency` as an `Annotated[app.crud.base.CRUDLike[...],
-Depends(...)]`-shaped value — `CRUDLike` is a `Protocol` both
-`CRUDInterface` (current version) and `CompatCRUD` (deprecated version,
-see "API and model versioning" below) satisfy structurally, so the same
-three factories build both.
+closures over the Pydantic views and CRUD dependency passed to them.
+`build_resource_router` composes all three into one resource-version's
+combined `APIRouter`, mounting each under its own `/json`/`/xml`/`/web`
+sub-prefix — `heroes.py`/`heroes_v1.py` are one `build_resource_router(...)`
+call each, not three separate per-format router modules; see "API and
+model versioning" below and `docs/adrs/0009-...md` for the full path
+shape. Each factory takes `crud_dependency` as an
+`Annotated[app.crud.base.CRUDLike[...], Depends(...)]`-shaped value —
+`CRUDLike` is a `Protocol` both `CRUDInterface` (current version) and
+`CompatCRUD` (deprecated version, see "API and model versioning" below)
+satisfy structurally, so the same factories build both.
 
 **Record addressing, filtering/sorting, and bulk actions** (`build_json_router`/
 `build_xml_router`): a single record is addressed by an `id` query
@@ -85,7 +85,8 @@ own auto-built one, so every such route also takes the injected
 `response: Response` and merges it in via `crud_router.py`'s private
 `_with_dependency_headers` before returning. Skipping this silently drops
 router-level headers on every XML/web route with no visible error — this
-bit `heroes_v1_xml.py`/`heroes_v1_web.py` (see "API and model versioning").
+bit the deprecated v1 XML/web routes once, before the helper was
+introduced (see "API and model versioning").
 
 `build_web_router`'s `/form` POST route parses `Request.form()` generically
 (field names aren't known until the factory is called, so a typed
@@ -96,31 +97,45 @@ body.
 
 ## API and model versioning
 
-A resource's routes are mounted under a `/v{N}` path prefix at
-`include_router` time in `app.main` — `/v2/heroes*` for the current
-Hero shape, `/v1/heroes*` for the deprecated one. There is no bare
-unversioned alias; callers pick a version explicitly. The DB model
-(`app.models`) always represents the *current* shape only — an older
-API version is a `views` + `crud` concern, never a second table/model
-(see `docs/adrs/0002-api-and-model-versioning.md`).
+A resource's routes are versioned along three independent, explicit path
+segments: `/crud/v{router_version}/heroes/v{model_version}/{format}` —
+e.g. `/crud/v1/heroes/v2/json` (current Hero shape), `/crud/v1/heroes/v1/xml`
+(deprecated shape), `/crud/v1/heroes/v2/web/form`. There is no bare
+unversioned alias on any of the three axes; callers pick a router
+version, a resource-shape version, and a format explicitly. See
+`docs/adrs/0009-explicit-crud-router-and-model-versioning-segments.md`
+for the full reasoning; it supersedes
+`docs/adrs/0002-api-and-model-versioning.md`.
+
+`router_version` (`crud_router.py`'s `ROUTER_VERSION` constant) names a
+version of the generic router factories themselves, not a resource's
+shape — every resource imports it rather than hardcoding `"v1"`. The DB
+model (`app.models`) always represents the *current* shape only — an
+older API version is a `views` + `crud` concern, never a second
+table/model. Only `app.views` classes carry a numeric suffix, current
+version included (e.g. `views/hero_v2.py`'s `HeroV2*`, matching the
+already-suffixed `views/hero_v1.py`'s `HeroV1*`).
 
 A deprecated version follows the `*_vN.py` pattern: a `views/hero_vN.py`
 module defining that version's Pydantic shape plus pure converter
 functions to/from the current version's views (see
-`app.views.hero_v1`), and a sibling controller set
-(`heroes_v1.py`/`heroes_v1_xml.py`/`heroes_v1_web.py`) that calls the
-same three factories "Generic CRUD router factories" above describes,
-with `crud_dependency` pointing at a `CompatCRUD`-typed dependency instead
-of a `CRUDInterface`-typed one. `app.crud.compat.CompatCRUD` is the
-reusable wrapper that adapts the current version's `CRUDInterface` to
-speak in the deprecated view's shape, so the deprecated router needs no
-new persistence wiring — see `app.crud.README.md`. Apply
-`app.http_headers.sunset(...)` via each deprecated router's
-`router_dependencies=[...]` factory argument (not per route) so every
-route under it advertises `Sunset`/`Deprecation`/`Link` headers at once,
-pointing at the current version's equivalent path — every deprecated
-sibling (JSON/XML/web alike) does this, so responses in every format
-carry the same headers.
+`app.views.hero_v1`), and a sibling controller module (`heroes_v1.py`)
+that calls the same `build_resource_router` "Generic CRUD router
+factories" above describes, with `crud_dependency` pointing at a
+`CompatCRUD`-typed dependency instead of a `CRUDInterface`-typed one.
+`app.crud.compat.CompatCRUD` is the reusable wrapper that adapts the
+current version's `CRUDInterface` to speak in the deprecated view's
+shape, so the deprecated router needs no new persistence wiring — see
+`app.crud.README.md`. Apply `app.http_headers.sunset(...)` via the
+deprecated resource-version's `router_dependencies=[...]`
+`build_resource_router` argument (not per format) so every route under
+it — JSON/XML/web alike — advertises `Sunset`/`Deprecation`/`Link`
+headers at once; a router's own `dependencies` merge into every route of
+a sub-router later `include_router`'d into it, so one declaration on the
+combined router reaches all three formats. Because that's now a single
+shared declaration rather than one per format, the `Link` header points
+at the successor resource-version's base path (e.g.
+`/crud/v1/heroes/v2`), not a format-specific equivalent.
 
 ## Do
 
@@ -129,9 +144,9 @@ carry the same headers.
   `Annotated[..., Depends(...)]` for reuse across that router's routes,
   following `heroes.py`'s shape — `app.crud.dependency.
   build_repository_provider` supplies the MODE-aware repository it wraps),
-  then one `build_json_router(...)` call (plus `build_xml_router`/
-  `build_web_router` for the sibling formats "Generic CRUD router
-  factories" above describes).
+  then one `build_resource_router(...)` call (or a single
+  `build_json_router(...)` call directly, for a resource that only ever
+  needs JSON — see "Generic CRUD router factories" above).
 - Add auth to a route with `Depends(get_current_claims)` from
   `app.oidc` — a route with no such dependency is public.
 - `include_router` a new router in `app.main`.

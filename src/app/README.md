@@ -264,9 +264,11 @@ against a throwaway `Limiter` instead.
 
 ## Example CRUD resource: Hero
 
-`models/hero.py` / `views/hero.py` / `controllers/heroes.py` are a
-worked example of the generic CRUD interface, wired up as `/v2/heroes`
-(list/create/get/update/delete — see `controllers/heroes.py`). Adding
+`models/hero.py` / `views/hero_v2.py` / `controllers/heroes.py` are a
+worked example of the generic CRUD interface, wired up as
+`/crud/v1/heroes/v2/json` (list/create/get/update/delete — see
+`controllers/heroes.py`; `/xml` and `/web` siblings also exist, see
+`controllers/README.md`'s "Generic CRUD router factories"). Adding
 another resource follows the same three-file shape: an `IdentifiedBase`
 subclass in `models/`, an `ORMView` subclass (plus `*Create`/`*Update`
 variants) in `views/`, and a router in `controllers/` that builds a
@@ -282,7 +284,7 @@ sequenceDiagram
     participant Repo as repositories/sqlalchemy.py
     participant DB as Postgres
 
-    Client->>Controller: GET /v2/heroes?id={id}
+    Client->>Controller: GET /crud/v1/heroes/v2/json?id={id}
     Controller->>CRUD: get(id)
     CRUD->>Repo: get(id)
     Repo->>DB: SELECT ... WHERE id = ?
@@ -296,18 +298,19 @@ Under `MODE=mock`, `Repo`/`DB` are replaced by
 `repositories/memory.py`'s `InMemoryRepository`, with no other layer
 changing — see "MODE (dev / mock / production)" above.
 
-`/v2/heroes` also supports schema-driven filtering/sorting (e.g.
-`?name__icontains=man&sort=-created_at`) and bulk update/delete over a
-filter set (`PATCH`/`DELETE` with no `id`) — see `controllers/README.md`'s
-"Generic CRUD router factories" and `docs/adrs/0008-generic-schema-driven-
-query-and-bulk-actions.md` for why that logic lives in the shared
-repository/CRUD layers rather than in `heroes.py` itself.
+`/crud/v1/heroes/v2/json` also supports schema-driven filtering/sorting
+(e.g. `?name__icontains=man&sort=-created_at`) and bulk update/delete
+over a filter set (`PATCH`/`DELETE` with no `id`) — see
+`controllers/README.md`'s "Generic CRUD router factories" and
+`docs/adrs/0008-generic-schema-driven-query-and-bulk-actions.md` for why
+that logic lives in the shared repository/CRUD layers rather than in
+`heroes.py` itself.
 
-Hero also carries a deprecated `/v1/heroes` sibling version, backed by
-the same data — see `controllers/README.md`'s "API and model
-versioning" and `docs/adrs/0002-api-and-model-versioning.md` for the
-path-prefix versioning convention any future breaking resource change
-follows.
+Hero also carries a deprecated `/crud/v1/heroes/v1` sibling version,
+backed by the same data — see `controllers/README.md`'s "API and model
+versioning" and `docs/adrs/0009-explicit-crud-router-and-model-
+versioning-segments.md` for the path-segment versioning convention any
+future breaking resource change follows.
 
 ## Do
 

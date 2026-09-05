@@ -1,4 +1,4 @@
-"""Integration test: /v2/heroes CRUD routes against the real Postgres stack service."""
+"""Integration test: /crud/v1/heroes/v2/json CRUD routes against the real Postgres stack service."""
 
 import json
 from collections.abc import Iterator
@@ -37,47 +37,49 @@ def _authed() -> Iterator[None]:
 def test_hero_crud_lifecycle_against_real_postgres() -> None:
     """Create, list, get, update, and delete a hero through the live app and real DB."""
     create_response = client.post(
-        "/v2/heroes", json={"name": "Wonder Woman", "powers": ["Super strength"]}
+        "/crud/v1/heroes/v2/json", json={"name": "Wonder Woman", "powers": ["Super strength"]}
     )
     assert create_response.status_code == 201
     hero_id = create_response.json()["id"]
 
     try:
-        list_response = client.get("/v2/heroes")
+        list_response = client.get("/crud/v1/heroes/v2/json")
         assert list_response.status_code == 200
         assert any(hero["id"] == hero_id for hero in list_response.json())
 
-        get_response = client.get("/v2/heroes", params={"id": hero_id})
+        get_response = client.get("/crud/v1/heroes/v2/json", params={"id": hero_id})
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Wonder Woman"
 
         update_response = client.patch(
-            "/v2/heroes", params={"id": hero_id}, json={"powers": ["Lasso of truth"]}
+            "/crud/v1/heroes/v2/json", params={"id": hero_id}, json={"powers": ["Lasso of truth"]}
         )
         assert update_response.status_code == 200
         assert update_response.json()["powers"] == ["Lasso of truth"]
     finally:
-        delete_response = client.delete("/v2/heroes", params={"id": hero_id})
+        delete_response = client.delete("/crud/v1/heroes/v2/json", params={"id": hero_id})
         assert delete_response.status_code == 204
 
-    missing_response = client.get("/v2/heroes", params={"id": hero_id})
+    missing_response = client.get("/crud/v1/heroes/v2/json", params={"id": hero_id})
     assert missing_response.status_code == 404
 
 
 def test_hero_filter_sort_and_bulk_actions_against_real_postgres() -> None:
     """Filtering/sorting a list and bulk update/delete via filters work over the live app."""
     batman = client.post(
-        "/v2/heroes", json={"name": "Batman Filter Test", "powers": ["Detective skills"]}
+        "/crud/v1/heroes/v2/json",
+        json={"name": "Batman Filter Test", "powers": ["Detective skills"]},
     ).json()
     batgirl = client.post(
-        "/v2/heroes", json={"name": "Batgirl Filter Test", "powers": ["Detective skills"]}
+        "/crud/v1/heroes/v2/json",
+        json={"name": "Batgirl Filter Test", "powers": ["Detective skills"]},
     ).json()
     superman = client.post(
-        "/v2/heroes", json={"name": "Superman Filter Test", "powers": ["Flight"]}
+        "/crud/v1/heroes/v2/json", json={"name": "Superman Filter Test", "powers": ["Flight"]}
     ).json()
 
     try:
-        filtered = client.get("/v2/heroes", params={"name__icontains": "Filter Test"})
+        filtered = client.get("/crud/v1/heroes/v2/json", params={"name__icontains": "Filter Test"})
         assert filtered.status_code == 200
         assert {hero["id"] for hero in filtered.json()} == {
             batman["id"],
@@ -86,7 +88,7 @@ def test_hero_filter_sort_and_bulk_actions_against_real_postgres() -> None:
         }
 
         sorted_response = client.get(
-            "/v2/heroes", params={"name__icontains": "Filter Test", "sort": "name"}
+            "/crud/v1/heroes/v2/json", params={"name__icontains": "Filter Test", "sort": "name"}
         )
         assert [hero["name"] for hero in sorted_response.json()] == [
             "Batgirl Filter Test",
@@ -95,7 +97,7 @@ def test_hero_filter_sort_and_bulk_actions_against_real_postgres() -> None:
         ]
 
         bulk_update = client.patch(
-            "/v2/heroes",
+            "/crud/v1/heroes/v2/json",
             params={"name__icontains": "Bat"},
             json={"powers": ["Martial arts"]},
         )
@@ -104,27 +106,29 @@ def test_hero_filter_sort_and_bulk_actions_against_real_postgres() -> None:
         assert body["matched"] == 2
         assert set(body["ids"]) == {batman["id"], batgirl["id"]}
 
-        assert client.get("/v2/heroes", params={"id": batman["id"]}).json()["powers"] == [
-            "Martial arts"
-        ]
+        assert client.get("/crud/v1/heroes/v2/json", params={"id": batman["id"]}).json()[
+            "powers"
+        ] == ["Martial arts"]
 
-        bulk_delete = client.delete("/v2/heroes", params={"name__icontains": "Bat"})
+        bulk_delete = client.delete("/crud/v1/heroes/v2/json", params={"name__icontains": "Bat"})
         assert bulk_delete.status_code == 200
         assert bulk_delete.json()["matched"] == 2
-        assert client.get("/v2/heroes", params={"id": batman["id"]}).status_code == 404
-        assert client.get("/v2/heroes", params={"id": batgirl["id"]}).status_code == 404
+        assert client.get("/crud/v1/heroes/v2/json", params={"id": batman["id"]}).status_code == 404
+        assert (
+            client.get("/crud/v1/heroes/v2/json", params={"id": batgirl["id"]}).status_code == 404
+        )
     finally:
-        client.delete("/v2/heroes", params={"id": batman["id"]})
-        client.delete("/v2/heroes", params={"id": batgirl["id"]})
-        client.delete("/v2/heroes", params={"id": superman["id"]})
+        client.delete("/crud/v1/heroes/v2/json", params={"id": batman["id"]})
+        client.delete("/crud/v1/heroes/v2/json", params={"id": batgirl["id"]})
+        client.delete("/crud/v1/heroes/v2/json", params={"id": superman["id"]})
 
 
 def test_hero_bulk_actions_with_no_filters_and_no_id_are_rejected() -> None:
     """A bulk PATCH/DELETE with neither id nor filters is rejected, never a full-table action."""
-    update_response = client.patch("/v2/heroes", json={"name": "Should Not Apply"})
+    update_response = client.patch("/crud/v1/heroes/v2/json", json={"name": "Should Not Apply"})
     assert update_response.status_code == 422
 
-    delete_response = client.delete("/v2/heroes")
+    delete_response = client.delete("/crud/v1/heroes/v2/json")
     assert delete_response.status_code == 422
 
 
@@ -166,8 +170,8 @@ async def test_write_is_committed_before_the_response_is_sent() -> None:
             "http_version": "1.1",
             "method": "POST",
             "scheme": "http",
-            "path": "/v2/heroes",
-            "raw_path": b"/v2/heroes",
+            "path": "/crud/v1/heroes/v2/json",
+            "raw_path": b"/crud/v1/heroes/v2/json",
             "query_string": b"",
             "root_path": "",
             "headers": [
@@ -184,7 +188,7 @@ async def test_write_is_committed_before_the_response_is_sent() -> None:
 
     try:
         assert visible_when_body_sent == [True], (
-            "POST /v2/heroes returned its response before the INSERT was committed -- "
+            "POST /crud/v1/heroes/v2/json returned its response before the INSERT was committed -- "
             "a client acting on that response can fail to see its own write"
         )
     finally:

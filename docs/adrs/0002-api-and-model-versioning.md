@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [0009](0009-explicit-crud-router-and-model-versioning-segments.md)
 
 ## Context
 

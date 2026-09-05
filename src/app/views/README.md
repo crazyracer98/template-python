@@ -7,11 +7,11 @@ The View layer: Pydantic schemas returned by and accepted from
   (`model_config = ConfigDict(from_attributes=True)`, which is what lets
   `app.crud.base.CRUDInterface` build one straight from a SQLAlchemy
   model instance via `model_validate`), and `IXDTFDatetime` (see below).
-- `hero.py` — the example Hero views; see `../README.md`'s "Example CRUD
-  resource: Hero".
-- `hero_v1.py` — the deprecated `/v1/heroes` shape and its converter
-  functions to/from `hero.py`'s current shape; see the `*_vN.py`
-  pattern below.
+- `hero_v2.py` — the current (v2) Hero views; see `../README.md`'s
+  "Example CRUD resource: Hero".
+- `hero_v1.py` — the deprecated `/crud/v1/heroes/v1` shape and its
+  converter functions to/from `hero_v2.py`'s current shape; see the
+  `*_vN.py` pattern below.
 - `bulk.py` — `BulkUpdateResult`/`BulkDeleteResult`, the response shape
   for a bulk update/delete action (matched count plus the ids affected).
   Plain `BaseModel` subclasses, not `ORMView`: they wrap an already-
@@ -31,7 +31,7 @@ HTTP-date-formatted, `Sunset` header.
 
 - Subclass `ORMView`, not `pydantic.BaseModel` directly, for any view
   `app.crud.base.CRUDInterface` will build from an ORM instance.
-- Give a resource three views following `hero.py`'s shape: `*Create`
+- Give a resource three views following `hero_v2.py`'s shape: `*Create`
   (fields accepted on create), `*Update` (the same fields, all
   `| None = None`, for partial updates), and the plain name (the full
   read view, with `id`).

@@ -11,7 +11,7 @@ def seeded_hero_id(page: Page, base_url: str, access_token: Callable[[str], str]
     """Create a hero as maintainer (viewer can't) and delete it again once the test is done."""
     maintainer_headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     create_response = page.request.post(
-        f"{base_url}/v2/heroes",
+        f"{base_url}/crud/v1/heroes/v2/json",
         data={"name": "Iron Fist", "powers": ["Chi mastery"]},
         headers=maintainer_headers,
     )
@@ -21,7 +21,7 @@ def seeded_hero_id(page: Page, base_url: str, access_token: Callable[[str], str]
         yield hero_id
     finally:
         page.request.delete(
-            f"{base_url}/v2/heroes", params={"id": hero_id}, headers=maintainer_headers
+            f"{base_url}/crud/v1/heroes/v2/json", params={"id": hero_id}, headers=maintainer_headers
         )
 
 
@@ -31,30 +31,30 @@ def test_viewer_can_read_but_not_write(
     """A viewer can read heroes across every format but is denied every write and /audit."""
     headers = {"Authorization": f"Bearer {access_token('viewer')}"}
 
-    list_response = page.request.get(f"{base_url}/v2/heroes", headers=headers)
+    list_response = page.request.get(f"{base_url}/crud/v1/heroes/v2/json", headers=headers)
     assert list_response.ok
     assert any(hero["id"] == seeded_hero_id for hero in list_response.json())
 
     get_response = page.request.get(
-        f"{base_url}/v2/heroes", params={"id": seeded_hero_id}, headers=headers
+        f"{base_url}/crud/v1/heroes/v2/json", params={"id": seeded_hero_id}, headers=headers
     )
     assert get_response.ok
 
-    list_xml_response = page.request.get(f"{base_url}/v2/heroes/xml", headers=headers)
+    list_xml_response = page.request.get(f"{base_url}/crud/v1/heroes/v2/xml", headers=headers)
     assert list_xml_response.ok
     assert f"<id>{seeded_hero_id}</id>" in list_xml_response.text()
 
     get_xml_response = page.request.get(
-        f"{base_url}/v2/heroes/xml", params={"id": seeded_hero_id}, headers=headers
+        f"{base_url}/crud/v1/heroes/v2/xml", params={"id": seeded_hero_id}, headers=headers
     )
     assert get_xml_response.ok
 
-    form_response = page.request.get(f"{base_url}/v2/heroes/form", headers=headers)
+    form_response = page.request.get(f"{base_url}/crud/v1/heroes/v2/web/form", headers=headers)
     assert form_response.ok
     assert "<form" in form_response.text()
 
     create_response = page.request.post(
-        f"{base_url}/v2/heroes",
+        f"{base_url}/crud/v1/heroes/v2/json",
         data={"name": "Nobody", "powers": ["None"]},
         headers=headers,
         fail_on_status_code=False,
@@ -62,7 +62,7 @@ def test_viewer_can_read_but_not_write(
     assert create_response.status == 403
 
     update_response = page.request.patch(
-        f"{base_url}/v2/heroes",
+        f"{base_url}/crud/v1/heroes/v2/json",
         params={"id": seeded_hero_id},
         data={"powers": ["None"]},
         headers=headers,
@@ -71,7 +71,7 @@ def test_viewer_can_read_but_not_write(
     assert update_response.status == 403
 
     delete_response = page.request.delete(
-        f"{base_url}/v2/heroes",
+        f"{base_url}/crud/v1/heroes/v2/json",
         params={"id": seeded_hero_id},
         headers=headers,
         fail_on_status_code=False,

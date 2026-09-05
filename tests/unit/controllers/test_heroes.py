@@ -1,4 +1,4 @@
-"""Unit test: /v2/heroes CRUD routes, with the Hero repository faked out."""
+"""Unit test: /crud/v1/heroes/v2/json CRUD routes, with the Hero repository faked out."""
 
 from fastapi.testclient import TestClient
 
@@ -9,14 +9,14 @@ from app.main import app
 from app.models.hero import Hero as HeroModel
 from app.oidc import get_current_claims
 from app.repositories.memory import InMemoryRepository
-from app.views.hero import Hero
+from app.views.hero_v2 import HeroV2
 
 client = TestClient(app)
 
 
-def _override_crud(repository: InMemoryRepository[HeroModel]) -> CRUDInterface[Hero, HeroModel]:
+def _override_crud(repository: InMemoryRepository[HeroModel]) -> CRUDInterface[HeroV2, HeroModel]:
     """Build a CRUDInterface backed by the given in-memory repository."""
-    return CRUDInterface(schema=Hero, repository=repository)
+    return CRUDInterface(schema=HeroV2, repository=repository)
 
 
 def test_hero_crud_lifecycle(authed: None) -> None:
@@ -28,79 +28,81 @@ def test_hero_crud_lifecycle(authed: None) -> None:
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(repository)
     try:
         create_response = client.post(
-            "/v2/heroes", json={"name": "Spider-Man", "powers": ["Wall-crawling"]}
+            "/crud/v1/heroes/v2/json", json={"name": "Spider-Man", "powers": ["Wall-crawling"]}
         )
         assert create_response.status_code == 201
         hero_id = create_response.json()["id"]
 
-        list_response = client.get("/v2/heroes")
+        list_response = client.get("/crud/v1/heroes/v2/json")
         assert list_response.status_code == 200
         assert len(list_response.json()) == 1
 
-        get_response = client.get("/v2/heroes", params={"id": hero_id})
+        get_response = client.get("/crud/v1/heroes/v2/json", params={"id": hero_id})
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Spider-Man"
 
         update_response = client.patch(
-            "/v2/heroes", params={"id": hero_id}, json={"powers": ["Web-slinging"]}
+            "/crud/v1/heroes/v2/json", params={"id": hero_id}, json={"powers": ["Web-slinging"]}
         )
         assert update_response.status_code == 200
         assert update_response.json()["powers"] == ["Web-slinging"]
 
-        delete_response = client.delete("/v2/heroes", params={"id": hero_id})
+        delete_response = client.delete("/crud/v1/heroes/v2/json", params={"id": hero_id})
         assert delete_response.status_code == 204
 
-        missing_response = client.get("/v2/heroes", params={"id": hero_id})
+        missing_response = client.get("/crud/v1/heroes/v2/json", params={"id": hero_id})
         assert missing_response.status_code == 404
     finally:
         del app.dependency_overrides[get_hero_crud]
 
 
 def test_get_missing_hero_returns_404(authed: None) -> None:
-    """GET /v2/heroes?id= for a nonexistent id returns 404."""
+    """GET /crud/v1/heroes/v2/json?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.get("/v2/heroes", params={"id": 999})
+        response = client.get("/crud/v1/heroes/v2/json", params={"id": 999})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_update_missing_hero_returns_404(authed: None) -> None:
-    """PATCH /v2/heroes?id= for a nonexistent id returns 404."""
+    """PATCH /crud/v1/heroes/v2/json?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.patch("/v2/heroes", params={"id": 999}, json={"name": "Nobody"})
+        response = client.patch(
+            "/crud/v1/heroes/v2/json", params={"id": 999}, json={"name": "Nobody"}
+        )
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_delete_missing_hero_returns_404(authed: None) -> None:
-    """DELETE /v2/heroes?id= for a nonexistent id returns 404."""
+    """DELETE /crud/v1/heroes/v2/json?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.delete("/v2/heroes", params={"id": 999})
+        response = client.delete("/crud/v1/heroes/v2/json", params={"id": 999})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_hero_routes_require_auth() -> None:
-    """GET /v2/heroes with no Authorization header is rejected with 401."""
-    response = client.get("/v2/heroes")
+    """GET /crud/v1/heroes/v2/json with no Authorization header is rejected with 401."""
+    response = client.get("/crud/v1/heroes/v2/json")
     assert response.status_code == 401
 
 
 def test_hero_create_requires_write_role() -> None:
-    """POST /v2/heroes with only the viewer role is rejected with 403."""
+    """POST /crud/v1/heroes/v2/json with only the viewer role is rejected with 403."""
     settings = get_settings()
     app.dependency_overrides[get_current_claims] = lambda: {
         "sub": "viewer-user",
         "resource_access": {settings.oidc_client_id: {"roles": ["viewer"]}},
     }
     try:
-        response = client.post("/v2/heroes", json={"name": "X", "powers": ["Y"]})
+        response = client.post("/crud/v1/heroes/v2/json", json={"name": "X", "powers": ["Y"]})
     finally:
         del app.dependency_overrides[get_current_claims]
     assert response.status_code == 403

@@ -1,4 +1,4 @@
-"""E2E smoke test: /v2/heroes/form and /v2/heroes/components.js against the live api."""
+"""E2E smoke test: /crud/v1/heroes/v2/web/form and web/components.js against the live api."""
 
 from collections.abc import Callable
 
@@ -8,10 +8,10 @@ from playwright.sync_api import Page, expect
 def test_hero_form_serves_html_and_accepts_a_submission(
     page: Page, base_url: str, access_token: Callable[[str], str]
 ) -> None:
-    """GET /v2/heroes/form serves HTML; POSTing to it creates a hero and redirects back."""
+    """GET web/form serves HTML; POSTing to it creates a hero and redirects back."""
     headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
 
-    form_response = page.request.get(f"{base_url}/v2/heroes/form", headers=headers)
+    form_response = page.request.get(f"{base_url}/crud/v1/heroes/v2/web/form", headers=headers)
     assert form_response.ok
     assert "<form" in form_response.text()
     assert form_response.headers["x-frame-options"] == "DENY"
@@ -19,21 +19,21 @@ def test_hero_form_serves_html_and_accepts_a_submission(
     assert "default-src 'self'" in form_response.headers["content-security-policy"]
 
     submit_response = page.request.post(
-        f"{base_url}/v2/heroes/form",
+        f"{base_url}/crud/v1/heroes/v2/web/form",
         form={"name": "Storm", "powers": "Weather control, Flight"},
         headers=headers,
     )
     assert submit_response.ok  # Playwright follows the 303 redirect by default
-    assert submit_response.url == f"{base_url}/v2/heroes/form"
+    assert submit_response.url == f"{base_url}/crud/v1/heroes/v2/web/form"
 
 
 def test_hero_form_submission_with_invalid_data_returns_422(
     page: Page, base_url: str, access_token: Callable[[str], str]
 ) -> None:
-    """POSTing /v2/heroes/form with an empty required field returns a validation problem."""
+    """POSTing web/form with an empty required field returns a validation problem."""
     headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     response = page.request.post(
-        f"{base_url}/v2/heroes/form",
+        f"{base_url}/crud/v1/heroes/v2/web/form",
         form={"name": "Nobody", "powers": ""},
         headers=headers,
         fail_on_status_code=False,
@@ -42,8 +42,8 @@ def test_hero_form_submission_with_invalid_data_returns_422(
 
 
 def test_hero_components_js_serves_javascript(page: Page, base_url: str) -> None:
-    """GET /v2/heroes/components.js serves the web-component JS, unauthenticated."""
-    response = page.request.get(f"{base_url}/v2/heroes/components.js")
+    """GET /crud/v1/heroes/v2/web/components.js serves the web-component JS, unauthenticated."""
+    response = page.request.get(f"{base_url}/crud/v1/heroes/v2/web/components.js")
     assert response.ok
     assert "customElements.define" in response.text()
 
@@ -55,23 +55,23 @@ def test_hero_list_filter_and_bulk_delete_through_the_rendered_ui(
 
     Drives the actual browser-rendered web component (not just its API calls
     directly), proving the filter controls/sort select/bulk checkboxes the JS
-    renders from `/v2/heroes/filters` actually reach the JSON router end to end.
+    renders from `/crud/v1/heroes/v2/json/filters` actually reach the JSON router end to end.
     """
     headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
     page.set_extra_http_headers(headers)
     first = page.request.post(
-        f"{base_url}/v2/heroes",
+        f"{base_url}/crud/v1/heroes/v2/json",
         data={"name": "Web UI Test Alpha", "powers": ["Speed"]},
         headers=headers,
     ).json()
     second = page.request.post(
-        f"{base_url}/v2/heroes",
+        f"{base_url}/crud/v1/heroes/v2/json",
         data={"name": "Web UI Test Beta", "powers": ["Speed"]},
         headers=headers,
     ).json()
 
     try:
-        page.goto(f"{base_url}/v2/heroes/form")
+        page.goto(f"{base_url}/crud/v1/heroes/v2/web/form")
         page.wait_for_selector("hero-list table")
 
         rows = page.locator("hero-list table tr:has(input[data-id])")
@@ -92,13 +92,13 @@ def test_hero_list_filter_and_bulk_delete_through_the_rendered_ui(
         expect(rows).to_have_count(0)
     finally:
         page.request.delete(
-            f"{base_url}/v2/heroes",
+            f"{base_url}/crud/v1/heroes/v2/json",
             params={"id": first["id"]},
             headers=headers,
             fail_on_status_code=False,
         )
         page.request.delete(
-            f"{base_url}/v2/heroes",
+            f"{base_url}/crud/v1/heroes/v2/json",
             params={"id": second["id"]},
             headers=headers,
             fail_on_status_code=False,

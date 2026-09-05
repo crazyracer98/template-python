@@ -40,6 +40,13 @@ settings = get_settings()
 # cap it the same way skip=0 already bounds the low end.
 _MAX_LIMIT = 1000
 
+# Version of these factories' own route shape/behavior -- not a resource's shape.
+# Bump only when build_json_router/build_xml_router/build_web_router themselves
+# change in a breaking way; every existing resource-version's path still names it
+# explicitly (see build_resource_router and docs/adrs/0009-...md) rather than
+# hardcoding "v1" independently per resource.
+ROUTER_VERSION = 1
+
 
 def _with_dependency_headers[ResponseT: Response](
     response: Response, built: ResponseT
@@ -257,6 +264,12 @@ def build_web_router[CreateT: BaseModel](
     actions reach the UI automatically once the JSON router that `api_base`
     points at supports them, with no separate data routes needed here.
 
+    A submitted form redirects back to `request.url.path` (this route's own
+    URL), not `api_base` -- the two only coincided by construction while every
+    format shared one prefix; since `build_resource_router` mounts JSON/XML/web
+    under their own explicit sub-prefixes, `api_base` names a sibling path that
+    is no longer this router's own.
+
     The generic `Request.form()` parsing this needs (fields aren't known until
     runtime) loses FastAPI's typed-`Form()` per-field OpenAPI documentation, so
     `openapi_extra` rebuilds an equivalent requestBody schema by hand -- every
@@ -283,10 +296,14 @@ def build_web_router[CreateT: BaseModel](
     }
 
     @router.get("/form", dependencies=[read_roles])
-    async def form_page(response: Response) -> Response:
+    async def form_page(request: Request, response: Response) -> Response:
+        own_base = request.url.path.removesuffix("/form")
         return _with_dependency_headers(
             response,
-            Response(content=render_crud_form(resource, fields, api_base), media_type="text/html"),
+            Response(
+                content=render_crud_form(resource, fields, api_base, own_base),
+                media_type="text/html",
+            ),
         )
 
     @router.post(
@@ -311,7 +328,7 @@ def build_web_router[CreateT: BaseModel](
             raise RequestValidationError(exc.errors()) from exc
         await crud.create(validated)
         return _with_dependency_headers(
-            response, RedirectResponse(f"{api_base}/form", status_code=status.HTTP_303_SEE_OTHER)
+            response, RedirectResponse(request.url.path, status_code=status.HTTP_303_SEE_OTHER)
         )
 
     @router.get("/components.js")
@@ -326,4 +343,85 @@ def build_web_router[CreateT: BaseModel](
             ),
         )
 
+    return router
+
+
+def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel](
+    *,
+    prefix: str,
+    tags: Sequence[str],
+    resource_label: str,
+    resource: str,
+    item_tag: str,
+    list_tag: str,
+    fields: Sequence[str],
+    schema: type[SchemaT],
+    create_schema: type[CreateT],
+    update_schema: type[UpdateT],
+    crud_dependency: Any,  # Annotated[CRUDLike[SchemaT], Depends(...)]
+    read_roles: Any,  # a Depends(...) object, e.g. heroes.ReadRoles
+    write_roles: Any,
+    delete_roles: Any,
+    router_dependencies: Sequence[Any] = (),
+) -> APIRouter:
+    """Compose build_json_router/build_xml_router/build_web_router into one resource-version router.
+
+    `prefix` is the resource-version's full prefix (e.g. `/crud/v1/heroes/v2`, see
+    docs/adrs/0009-...md) -- each format is mounted under it as its own explicit
+    `/json`/`/xml`/`/web` sub-prefix, so the returned router is mounted with a bare
+    `app.include_router(router)`, no prefix computed at the call site.
+
+    `router_dependencies` (e.g. app.http_headers.sunset(...) for a deprecated
+    version) is applied once, on this router's own constructor -- FastAPI merges a
+    router's own `dependencies` into every route of a sub-router later
+    `include_router`'d into it, so this single declaration reaches JSON/XML/web
+    alike, rather than each per-format factory call repeating it.
+    """
+    router = APIRouter(prefix=prefix, tags=list(tags), dependencies=list(router_dependencies))
+    router.include_router(
+        build_json_router(
+            prefix="",
+            tags=tags,
+            resource_label=resource_label,
+            schema=schema,
+            create_schema=create_schema,
+            update_schema=update_schema,
+            crud_dependency=crud_dependency,
+            read_roles=read_roles,
+            write_roles=write_roles,
+            delete_roles=delete_roles,
+        ),
+        prefix="/json",
+    )
+    router.include_router(
+        build_xml_router(
+            prefix="",
+            tags=tags,
+            resource_label=resource_label,
+            item_tag=item_tag,
+            list_tag=list_tag,
+            schema=schema,
+            create_schema=create_schema,
+            update_schema=update_schema,
+            crud_dependency=crud_dependency,
+            read_roles=read_roles,
+            write_roles=write_roles,
+            delete_roles=delete_roles,
+        ),
+        prefix="/xml",
+    )
+    router.include_router(
+        build_web_router(
+            prefix="",
+            tags=tags,
+            resource=resource,
+            api_base=f"{prefix}/json",
+            fields=fields,
+            create_schema=create_schema,
+            crud_dependency=crud_dependency,
+            read_roles=read_roles,
+            write_roles=write_roles,
+        ),
+        prefix="/web",
+    )
     return router

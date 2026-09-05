@@ -48,9 +48,9 @@ setup composed from independent, swappable pieces.
    `src/app/README.md`'s "Alembic migrations".
 3. Health check: `curl localhost:8000/health/live` (liveness) or
    `curl localhost:8000/health/ready` (readiness — checks Postgres,
-   Redis, S3, and the OIDC provider). `curl localhost:8000/heroes` is a
-   worked example CRUD resource (see `src/app/README.md`'s "Example CRUD
-   resource: Hero"). `/protected` needs a bearer token from Keycloak —
+   Redis, S3, and the OIDC provider). `curl localhost:8000/crud/v1/heroes/v2/json`
+   is a worked example CRUD resource (see `src/app/README.md`'s "Example
+   CRUD resource: Hero"). `/protected` needs a bearer token from Keycloak —
    see `.devcontainer/stack/keycloak/README.md`.
 
 Without a devcontainer: install [`uv`](https://docs.astral.sh/uv/), export

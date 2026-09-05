@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Iterator
+from contextlib import contextmanager
 from uuid import uuid4
 
 import pytest
@@ -18,20 +19,37 @@ from app.oidc import get_current_claims
 client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def _authed() -> Iterator[None]:
-    """Grant every RBAC role for the duration of each test in this module."""
+@contextmanager
+def _authed_as(sub: str) -> Iterator[None]:
+    """Override get_current_claims to authenticate as `sub`, with every RBAC role.
+
+    Restores whatever override was in place on exit, so this can nest inside the
+    module's own `_authed` autouse fixture (see that fixture's docstring).
+    """
     settings = get_settings()
+    previous = app.dependency_overrides.get(get_current_claims)
     app.dependency_overrides[get_current_claims] = lambda: {
-        "sub": "test-user",
+        "sub": sub,
         "resource_access": {
             settings.oidc_client_id: {
                 "roles": ["viewer", "editor", "maintainer", "security", "detective"]
             }
         },
     }
-    yield
-    del app.dependency_overrides[get_current_claims]
+    try:
+        yield
+    finally:
+        if previous is None:
+            del app.dependency_overrides[get_current_claims]
+        else:
+            app.dependency_overrides[get_current_claims] = previous
+
+
+@pytest.fixture(autouse=True)
+def _authed() -> Iterator[None]:
+    """Authenticate every request in this module as "test-user" by default."""
+    with _authed_as("test-user"):
+        yield
 
 
 def test_hero_crud_lifecycle_against_real_postgres() -> None:
@@ -195,3 +213,54 @@ async def test_write_is_committed_before_the_response_is_sent() -> None:
         async with async_session_factory() as cleanup:
             await cleanup.execute(delete(Hero).where(Hero.name == name))
             await cleanup.commit()
+
+
+def test_owner_cannot_update_or_delete_another_owners_hero_against_real_postgres() -> None:
+    """Reads stay open across owners, but a second caller can't update/delete Alice's hero.
+
+    Proves app.interfaces.base.OwnerScope(read_scoped=False)'s wiring holds end-to-end
+    (real get_hero_crud, real SQLAlchemyRepository/session), not just against the
+    in-memory fake tests/unit/crud_1/heroes/test_heroes_v2.py and tests/unit/
+    interfaces/test_base.py already cover.
+    """
+    alices_hero = client.post(
+        "/crud/v1/heroes/v2/json",
+        json={"name": "Owner Isolation Test", "powers": ["Weather control"]},
+    ).json()
+    assert alices_hero["owner_id"] == "test-user"
+
+    try:
+        with _authed_as("bob-integration"):
+            get_response = client.get("/crud/v1/heroes/v2/json", params={"id": alices_hero["id"]})
+            assert get_response.status_code == 200
+
+            update_response = client.patch(
+                "/crud/v1/heroes/v2/json",
+                params={"id": alices_hero["id"]},
+                json={"powers": ["Hijacked"]},
+            )
+            assert update_response.status_code == 404
+
+            delete_response = client.delete(
+                "/crud/v1/heroes/v2/json", params={"id": alices_hero["id"]}
+            )
+            assert delete_response.status_code == 404
+
+            bulk_update = client.patch(
+                "/crud/v1/heroes/v2/json",
+                params={"name__icontains": "Owner Isolation Test"},
+                json={"powers": ["Hijacked in bulk"]},
+            )
+            assert bulk_update.status_code == 200
+            assert bulk_update.json()["matched"] == 0
+
+            bulk_delete = client.delete(
+                "/crud/v1/heroes/v2/json", params={"name__icontains": "Owner Isolation Test"}
+            )
+            assert bulk_delete.status_code == 200
+            assert bulk_delete.json()["matched"] == 0
+
+        still_alices = client.get("/crud/v1/heroes/v2/json", params={"id": alices_hero["id"]})
+        assert still_alices.json()["powers"] == ["Weather control"]
+    finally:
+        client.delete("/crud/v1/heroes/v2/json", params={"id": alices_hero["id"]})

@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from app.interfaces.base import CRUDInterface
+from app.interfaces.base import CRUDInterface, OwnerScope
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
 
@@ -21,6 +21,7 @@ class _WidgetRecord:
 
     id: int
     label: str
+    owner_id: str = ""
 
 
 class _Widget(BaseModel):
@@ -29,6 +30,7 @@ class _Widget(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     label: str
+    owner_id: str = ""
 
 
 class _WidgetCreate(BaseModel):
@@ -224,3 +226,186 @@ async def test_delete_many_removes_every_match(
     deleted = await crud.delete_many(filters=[FilterClause("label", FilterOp.ICONTAINS, "ap")])
     assert len(deleted) == 2
     assert await crud.count() == 1
+
+
+# --- OwnerScope: opt-in per-owner scoping ------------------------------------
+#
+# Two CRUDInterfaces sharing one repository, scoped to different owners, prove
+# neither can reach the other's records -- mirroring how a real resource would
+# build one CRUDInterface per request from the caller's own claims.
+
+
+@pytest.fixture
+def repository() -> _FakeWidgetRepository:
+    """Return a fresh in-memory fake repository, shared by two owner-scoped interfaces."""
+    return _FakeWidgetRepository()
+
+
+@pytest.fixture
+def alice_crud(repository: _FakeWidgetRepository) -> CRUDInterface[_Widget, _WidgetRecord]:
+    """Return a CRUDInterface scoped to owner "alice", backed by the shared repository."""
+    return CRUDInterface(
+        schema=_Widget, repository=repository, owner=OwnerScope("owner_id", "alice")
+    )
+
+
+@pytest.fixture
+def bob_crud(repository: _FakeWidgetRepository) -> CRUDInterface[_Widget, _WidgetRecord]:
+    """Return a CRUDInterface scoped to owner "bob", backed by the shared repository."""
+    return CRUDInterface(schema=_Widget, repository=repository, owner=OwnerScope("owner_id", "bob"))
+
+
+async def test_owner_create_stamps_owner_field_ignoring_input(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """create() stamps the owner field from the scope, not from caller input."""
+    created = await alice_crud.create(_WidgetCreate(label="a"))
+    assert created.owner_id == "alice"
+
+
+async def test_owner_get_cannot_reach_another_owners_record(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """get() returns None for a record that exists but belongs to a different owner."""
+    alices = await alice_crud.create(_WidgetCreate(label="a"))
+    assert await bob_crud.get(alices.id) is None
+    assert await alice_crud.get(alices.id) == alices
+
+
+async def test_owner_list_only_returns_own_records(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """list() only returns the records owned by this interface's scope, filters included."""
+    await alice_crud.create(_WidgetCreate(label="apple"))
+    await bob_crud.create(_WidgetCreate(label="banana"))
+    assert [w.label for w in await alice_crud.list()] == ["apple"]
+    assert [w.label for w in await bob_crud.list()] == ["banana"]
+
+
+async def test_owner_count_only_counts_own_records(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """count() only counts records owned by this interface's scope."""
+    await alice_crud.create(_WidgetCreate(label="apple"))
+    await bob_crud.create(_WidgetCreate(label="banana"))
+    assert await alice_crud.count() == 1
+    assert await bob_crud.count() == 1
+
+
+async def test_owner_update_cannot_reach_another_owners_record(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """update() returns None (and makes no change) for another owner's record."""
+    alices = await alice_crud.create(_WidgetCreate(label="a"))
+    assert await bob_crud.update(alices.id, _WidgetUpdate(label="hijacked")) is None
+    assert (await alice_crud.get(alices.id)).label == "a"  # type: ignore[union-attr]
+
+
+async def test_owner_delete_cannot_reach_another_owners_record(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """delete() reports False (and deletes nothing) for another owner's record."""
+    alices = await alice_crud.create(_WidgetCreate(label="a"))
+    assert await bob_crud.delete(alices.id) is False
+    assert await alice_crud.get(alices.id) == alices
+
+
+async def test_owner_update_many_only_matches_own_records(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """update_many() only applies to records owned by this interface's scope."""
+    await alice_crud.create(_WidgetCreate(label="apple"))
+    await bob_crud.create(_WidgetCreate(label="apricot"))
+    updated = await bob_crud.update_many(
+        filters=[FilterClause("label", FilterOp.ICONTAINS, "ap")],
+        data=_WidgetUpdate(label="updated"),
+    )
+    assert [w.label for w in updated] == ["updated"]
+    assert (await alice_crud.get((await alice_crud.list())[0].id)).label == "apple"  # type: ignore[union-attr]
+
+
+async def test_owner_delete_many_only_matches_own_records(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """delete_many() only deletes records owned by this interface's scope."""
+    await alice_crud.create(_WidgetCreate(label="apple"))
+    await bob_crud.create(_WidgetCreate(label="apricot"))
+    deleted = await bob_crud.delete_many(filters=[FilterClause("label", FilterOp.ICONTAINS, "ap")])
+    assert len(deleted) == 1
+    assert await alice_crud.count() == 1
+    assert await bob_crud.count() == 0
+
+
+# --- OwnerScope(read_scoped=False): open reads, owner-restricted writes ------
+
+
+@pytest.fixture
+def alice_open_reads_crud(
+    repository: _FakeWidgetRepository,
+) -> CRUDInterface[_Widget, _WidgetRecord]:
+    """Return a CRUDInterface scoped to "alice" with reads opened to every owner."""
+    return CRUDInterface(
+        schema=_Widget,
+        repository=repository,
+        owner=OwnerScope("owner_id", "alice", read_scoped=False),
+    )
+
+
+@pytest.fixture
+def bob_open_reads_crud(
+    repository: _FakeWidgetRepository,
+) -> CRUDInterface[_Widget, _WidgetRecord]:
+    """Return a CRUDInterface scoped to "bob" with reads opened to every owner."""
+    return CRUDInterface(
+        schema=_Widget,
+        repository=repository,
+        owner=OwnerScope("owner_id", "bob", read_scoped=False),
+    )
+
+
+async def test_read_scoped_false_lets_every_owner_list_every_record(
+    alice_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """list()/count() see every record regardless of owner when read_scoped=False."""
+    await alice_open_reads_crud.create(_WidgetCreate(label="apple"))
+    await bob_open_reads_crud.create(_WidgetCreate(label="banana"))
+    assert {w.label for w in await alice_open_reads_crud.list()} == {"apple", "banana"}
+    assert await bob_open_reads_crud.count() == 2
+
+
+async def test_read_scoped_false_lets_every_owner_get_by_id(
+    alice_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """get() finds another owner's record by id when read_scoped=False."""
+    alices = await alice_open_reads_crud.create(_WidgetCreate(label="apple"))
+    found = await bob_open_reads_crud.get(alices.id)
+    assert found == alices
+
+
+async def test_read_scoped_false_still_blocks_update_of_another_owners_record(
+    alice_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """update() still 404s (returns None) for another owner's record, reads aside."""
+    alices = await alice_open_reads_crud.create(_WidgetCreate(label="apple"))
+    assert await bob_open_reads_crud.update(alices.id, _WidgetUpdate(label="hijacked")) is None
+    assert (await alice_open_reads_crud.get(alices.id)).label == "apple"  # type: ignore[union-attr]
+
+
+async def test_read_scoped_false_still_blocks_delete_of_another_owners_record(
+    alice_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_open_reads_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """delete() still reports False for another owner's record, reads aside."""
+    alices = await alice_open_reads_crud.create(_WidgetCreate(label="apple"))
+    assert await bob_open_reads_crud.delete(alices.id) is False
+    assert await alice_open_reads_crud.get(alices.id) == alices

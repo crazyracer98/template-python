@@ -28,8 +28,9 @@ class HeroV2Update(ORMView):
 
 
 class HeroV2(HeroV2Base):
-    """A Hero as returned by the API, including its assigned id."""
+    """A Hero as returned by the API, including its assigned id and owner."""
 
     id: int
+    owner_id: str
     created_at: IXDTFDatetime
     updated_at: IXDTFDatetime

@@ -88,6 +88,31 @@ async def test_count_matches_filters(repository: InMemoryRepository[Hero]) -> No
     assert await repository.count(filters=[FilterClause("name", FilterOp.ICONTAINS, "bat")]) == 2
 
 
+async def test_get_update_and_delete_by_id(repository: InMemoryRepository[Hero]) -> None:
+    """get()/update()/delete() (single-record) round-trip by id.
+
+    Exercised directly here since Hero's own real HTTP routes no longer call these
+    for update/delete -- app.crud_1.heroes.heroes_v2.get_hero_crud always sets an
+    OwnerScope, which routes CRUDInterface.update/delete through update_many/
+    delete_many instead (see app.interfaces.base.OwnerScope's docstring).
+    """
+    heroes = await repository.list()
+    batman = next(hero for hero in heroes if hero.name == "Batman")
+
+    fetched = await repository.get(batman.id)
+    assert fetched is not None
+    assert fetched.name == "Batman"
+
+    updated = await repository.update(batman.id, {"powers": ["Martial arts"]})
+    assert updated is not None
+    assert updated.powers == ["Martial arts"]
+
+    assert await repository.delete(batman.id) is True
+    assert await repository.get(batman.id) is None
+    assert await repository.delete(batman.id) is False
+    assert await repository.update(batman.id, {"powers": ["N/A"]}) is None
+
+
 async def test_update_many_applies_to_every_match(repository: InMemoryRepository[Hero]) -> None:
     """update_many() applies the update to every record matching the filters."""
     updated = await repository.update_many(

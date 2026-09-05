@@ -18,6 +18,7 @@ class _FakeORMHero:
     id: int
     name: str
     powers: list[str]
+    owner_id: str
     created_at: datetime
     updated_at: datetime
 
@@ -50,7 +51,12 @@ def test_hero_update_allows_all_fields_omitted() -> None:
 def test_hero_converts_from_orm_instance() -> None:
     """HeroV2.model_validate builds a view straight from an ORM-shaped object."""
     orm_hero = _FakeORMHero(
-        id=1, name="Batman", powers=["Detective skills"], created_at=_NOW, updated_at=_NOW
+        id=1,
+        name="Batman",
+        powers=["Detective skills"],
+        owner_id="alice",
+        created_at=_NOW,
+        updated_at=_NOW,
     )
     hero = HeroV2.model_validate(orm_hero)
     assert hero.id == 1
@@ -60,6 +66,11 @@ def test_hero_converts_from_orm_instance() -> None:
 def test_hero_serializes_timestamps_as_ixdtf() -> None:
     """HeroV2's created_at/updated_at serialize as RFC 9557 IXDTF strings."""
     hero = HeroV2(
-        id=1, name="Batman", powers=["Detective skills"], created_at=_NOW, updated_at=_NOW
+        id=1,
+        name="Batman",
+        powers=["Detective skills"],
+        owner_id="alice",
+        created_at=_NOW,
+        updated_at=_NOW,
     )
     assert hero.model_dump(mode="json")["created_at"] == "2026-01-01T00:00:00Z[UTC]"

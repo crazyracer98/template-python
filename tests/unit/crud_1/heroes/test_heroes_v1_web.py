@@ -3,11 +3,11 @@
 from fastapi.testclient import TestClient
 
 from app.crud_1.heroes.heroes_v2 import get_hero_crud
-from app.interfaces.base import CRUDInterface
 from app.main import app
 from app.models.hero import Hero as HeroModel
 from app.repositories.memory import InMemoryRepository
-from app.views.hero_v2 import HeroV2
+
+from .conftest import override_hero_crud
 
 client = TestClient(app)
 
@@ -24,9 +24,7 @@ def test_hero_v1_form_serves_html(authed: None) -> None:
 def test_submit_hero_v1_form_creates_a_hero_and_redirects(authed: None) -> None:
     """POST /crud/v1/heroes/v1/web/form creates a hero and redirects back to the form."""
     repository = InMemoryRepository(HeroModel)
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=repository
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(repository)
     try:
         response = client.post(
             "/crud/v1/heroes/v1/web/form",

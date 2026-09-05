@@ -3,11 +3,11 @@
 from fastapi.testclient import TestClient
 
 from app.crud_1.heroes.heroes_v2 import get_hero_crud
-from app.interfaces.base import CRUDInterface
 from app.main import app
 from app.models.hero import Hero as HeroModel
 from app.repositories.memory import InMemoryRepository
-from app.views.hero_v2 import HeroV2
+
+from .conftest import override_hero_crud
 
 client = TestClient(app)
 
@@ -15,9 +15,7 @@ client = TestClient(app)
 def test_hero_xml_crud_lifecycle(authed: None) -> None:
     """Create, list, get, update, and delete a hero through the XML routes."""
     repository = InMemoryRepository(HeroModel)
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=repository
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(repository)
     try:
         create_response = client.post(
             "/crud/v1/heroes/v2/xml",
@@ -57,9 +55,7 @@ def test_hero_xml_crud_lifecycle(authed: None) -> None:
 
 def test_hero_xml_update_missing_returns_404(authed: None) -> None:
     """PATCH /crud/v1/heroes/v2/xml?id= for a nonexistent id returns 404."""
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=InMemoryRepository(HeroModel)
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(InMemoryRepository(HeroModel))
     try:
         response = client.patch(
             "/crud/v1/heroes/v2/xml",
@@ -74,9 +70,7 @@ def test_hero_xml_update_missing_returns_404(authed: None) -> None:
 
 def test_hero_xml_delete_missing_returns_404(authed: None) -> None:
     """DELETE /crud/v1/heroes/v2/xml?id= for a nonexistent id returns 404."""
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=InMemoryRepository(HeroModel)
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(InMemoryRepository(HeroModel))
     try:
         response = client.delete("/crud/v1/heroes/v2/xml", params={"id": 999})
     finally:
@@ -86,9 +80,7 @@ def test_hero_xml_delete_missing_returns_404(authed: None) -> None:
 
 def test_hero_xml_create_rejects_a_billion_laughs_payload(authed: None) -> None:
     """POST xml rejects a nested-entity-expansion payload with 400, not a hang/OOM."""
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=InMemoryRepository(HeroModel)
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(InMemoryRepository(HeroModel))
     billion_laughs = b"""<?xml version="1.0"?>
 <!DOCTYPE lolz [
  <!ENTITY lol "lol">

@@ -20,6 +20,7 @@ def test_hero_v2_to_v1_uses_only_the_first_power() -> None:
         id=1,
         name="Storm",
         powers=["Weather control", "Flight"],
+        owner_id="alice",
         created_at=_NOW,
         updated_at=_NOW,
     )

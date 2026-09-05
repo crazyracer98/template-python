@@ -15,7 +15,9 @@ async def test_crud_roundtrip_against_real_postgres() -> None:
     async with async_session_factory() as session:
         repository = SQLAlchemyRepository(session, Hero)
 
-        created = await repository.create({"name": "Iron Man", "powers": ["Powered armor"]})
+        created = await repository.create(
+            {"name": "Iron Man", "powers": ["Powered armor"], "owner_id": "tester"}
+        )
         assert created.id is not None
 
         fetched = await repository.get(created.id)
@@ -43,9 +45,15 @@ async def test_filter_sort_and_bulk_actions_against_real_postgres() -> None:
     async with async_session_factory() as session:
         repository = SQLAlchemyRepository(session, Hero)
 
-        batman = await repository.create({"name": "Batman", "powers": ["Detective skills"]})
-        batgirl = await repository.create({"name": "Batgirl", "powers": ["Detective skills"]})
-        superman = await repository.create({"name": "Superman", "powers": ["Flight"]})
+        batman = await repository.create(
+            {"name": "Batman", "powers": ["Detective skills"], "owner_id": "tester"}
+        )
+        batgirl = await repository.create(
+            {"name": "Batgirl", "powers": ["Detective skills"], "owner_id": "tester"}
+        )
+        superman = await repository.create(
+            {"name": "Superman", "powers": ["Flight"], "owner_id": "tester"}
+        )
 
         name_filter = [FilterClause("name", FilterOp.ICONTAINS, "bat")]
         assert await repository.count(filters=name_filter) == 2
@@ -78,8 +86,12 @@ async def test_every_filter_op_against_real_postgres() -> None:
     """
     async with async_session_factory() as session:
         repository = SQLAlchemyRepository(session, Hero)
-        low = await repository.create({"name": "FilterOp Low", "powers": ["A"]})
-        high = await repository.create({"name": "FilterOp High", "powers": ["A"]})
+        low = await repository.create(
+            {"name": "FilterOp Low", "powers": ["A"], "owner_id": "tester"}
+        )
+        high = await repository.create(
+            {"name": "FilterOp High", "powers": ["A"], "owner_id": "tester"}
+        )
         ids = [low.id, high.id]
 
         def by(op: FilterOp, value: object) -> list[FilterClause]:

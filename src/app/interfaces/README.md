@@ -20,7 +20,24 @@ CRUD class, only a model, a view, and a router that wires the two through
   `../controllers/crud_router.py`'s router factories are written against
   `CRUDLike` rather than concretely against `CRUDInterface`, specifically so
   the same factory builds both a current-version router and a deprecated
-  one.
+  one. `base.py` also has `OwnerScope`, an opt-in per-user/per-tenant
+  scoping hook: pass `CRUDInterface(..., owner=OwnerScope(field, value))` and
+  `update`/`delete`/`update_many`/`delete_many` are restricted to records
+  where `field == value`, `create` stamps `field` with `value` rather than
+  trusting it from the input view, and `get`/`list`/`count` are restricted
+  too *unless* `read_scoped=False` is also passed, in which case every
+  caller reads every record but can still only write their own.
+  `owner=None` (the default) changes nothing — a resource that never passes
+  it is unaffected. Resolve `value` from the caller's claims (typically
+  `claims["sub"]`) the same way `get_hero_crud` resolves its repository: as
+  a `Depends(get_current_claims)` parameter of the resource's own
+  `get_<resource>_crud`, not a new mechanism — see `app.crud_1.heroes.
+  heroes_v2.get_hero_crud` for the worked example (Hero uses
+  `read_scoped=False`: every caller reads every hero, same as before this
+  was added, but can only update/delete their own),
+  `docs/adrs/0011-owner-scoped-crud-example-resource.md` for the full
+  rationale, and `tests/unit/interfaces/test_base.py`'s `test_owner_*`/
+  `test_read_scoped_*` tests for the scoped, unscoped, and open-read paths.
 - `compat.py` — `CompatCRUD`, a generic wrapper that adapts a current
   `CRUDInterface` to speak in terms of an older (deprecated) API
   version's view, via caller-supplied converter functions. The building

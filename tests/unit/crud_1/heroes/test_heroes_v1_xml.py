@@ -3,11 +3,11 @@
 from fastapi.testclient import TestClient
 
 from app.crud_1.heroes.heroes_v2 import get_hero_crud
-from app.interfaces.base import CRUDInterface
 from app.main import app
 from app.models.hero import Hero as HeroModel
 from app.repositories.memory import InMemoryRepository
-from app.views.hero_v2 import HeroV2
+
+from .conftest import override_hero_crud
 
 client = TestClient(app)
 
@@ -15,9 +15,7 @@ client = TestClient(app)
 def test_hero_v1_xml_crud_lifecycle(authed: None) -> None:
     """Create, list, get, update, and delete a hero through the v1 XML routes."""
     repository = InMemoryRepository(HeroModel)
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=repository
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(repository)
     try:
         create_response = client.post(
             "/crud/v1/heroes/v1/xml",
@@ -58,9 +56,7 @@ def test_hero_v1_xml_crud_lifecycle(authed: None) -> None:
 
 def test_hero_v1_xml_update_missing_returns_404(authed: None) -> None:
     """PATCH /crud/v1/heroes/v1/xml?id= for a nonexistent id returns 404."""
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=InMemoryRepository(HeroModel)
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(InMemoryRepository(HeroModel))
     try:
         response = client.patch(
             "/crud/v1/heroes/v1/xml",
@@ -75,9 +71,7 @@ def test_hero_v1_xml_update_missing_returns_404(authed: None) -> None:
 
 def test_hero_v1_xml_delete_missing_returns_404(authed: None) -> None:
     """DELETE /crud/v1/heroes/v1/xml?id= for a nonexistent id returns 404."""
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=InMemoryRepository(HeroModel)
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(InMemoryRepository(HeroModel))
     try:
         response = client.delete("/crud/v1/heroes/v1/xml", params={"id": 999})
     finally:
@@ -87,9 +81,7 @@ def test_hero_v1_xml_delete_missing_returns_404(authed: None) -> None:
 
 def test_v1_xml_responses_carry_deprecation_headers(authed: None) -> None:
     """Every /crud/v1/heroes/v1/xml response carries Sunset/Deprecation/Link headers."""
-    app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
-        schema=HeroV2, repository=InMemoryRepository(HeroModel)
-    )
+    app.dependency_overrides[get_hero_crud] = override_hero_crud(InMemoryRepository(HeroModel))
     try:
         response = client.get("/crud/v1/heroes/v1/xml")
     finally:

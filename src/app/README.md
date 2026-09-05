@@ -324,6 +324,16 @@ versioning" and `docs/adrs/0009-explicit-crud-router-and-model-
 versioning-segments.md` for the path-segment versioning convention any
 future breaking resource change follows.
 
+Hero is also the worked example of `interfaces/base.py`'s opt-in
+`OwnerScope` hook: `get_hero_crud` passes `OwnerScope("owner_id",
+claims["sub"], read_scoped=False)`, so every authenticated caller still
+reads every hero (`read_scoped=False` keeps list/get shared, same as
+before this was added), but `update`/`delete` — single or bulk — only
+ever reach heroes the caller themselves created. See
+`docs/adrs/0011-owner-scoped-crud-example-resource.md` for why this
+shape was chosen and `interfaces/README.md`'s `OwnerScope` paragraph for
+the mechanism a new per-user/per-tenant resource opts into the same way.
+
 ## Do
 
 - Add new settings as typed fields on `Settings` in `config.py`, sourced

@@ -40,9 +40,19 @@ class CompatCRUD[LegacySchemaT: BaseModel, SchemaT: BaseModel, ModelT]:
         self._from_legacy_create = from_legacy_create
         self._from_legacy_update = from_legacy_update
 
-    async def get(self, record_id: int) -> LegacySchemaT | None:
-        """Return the record with the given id in the legacy shape, or None."""
-        current = await self._crud.get(record_id)
+    async def get(
+        self, record_id: int, *, include_archived: bool = False, include_unpublished: bool = False
+    ) -> LegacySchemaT | None:
+        """Return the record with the given id in the legacy shape, or None.
+
+        `include_archived`/`include_unpublished` are forwarded to the wrapped
+        CRUDInterface unconditionally -- see app.controllers.crud_actions.
+        resolve_list_or_get, which passes them on every request regardless of
+        whether the underlying model actually carries the matching mixin.
+        """
+        current = await self._crud.get(
+            record_id, include_archived=include_archived, include_unpublished=include_unpublished
+        )
         return self._to_legacy(current) if current is not None else None
 
     async def list(
@@ -52,18 +62,37 @@ class CompatCRUD[LegacySchemaT: BaseModel, SchemaT: BaseModel, ModelT]:
         limit: int = 100,
         filters: Sequence[FilterClause] = (),
         sort: Sequence[SortClause] = (),
+        include_archived: bool = False,
+        include_unpublished: bool = False,
     ) -> list[LegacySchemaT]:
         """Return up to `limit` matching records in the legacy shape, skipping the first `skip`."""
-        items = await self._crud.list(skip=skip, limit=limit, filters=filters, sort=sort)
+        items = await self._crud.list(
+            skip=skip,
+            limit=limit,
+            filters=filters,
+            sort=sort,
+            include_archived=include_archived,
+            include_unpublished=include_unpublished,
+        )
         return [self._to_legacy(item) for item in items]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
+    async def count(
+        self,
+        *,
+        filters: Sequence[FilterClause] = (),
+        include_archived: bool = False,
+        include_unpublished: bool = False,
+    ) -> int:
         """Return how many records match the given filters.
 
         Called by app.controllers.crud_actions before a bulk update/delete, to cap
         how many records a single action can affect.
         """
-        return await self._crud.count(filters=filters)
+        return await self._crud.count(
+            filters=filters,
+            include_archived=include_archived,
+            include_unpublished=include_unpublished,
+        )
 
     async def create(self, data: BaseModel) -> LegacySchemaT:
         """Create a record from a legacy-shaped payload and return it in the legacy shape."""

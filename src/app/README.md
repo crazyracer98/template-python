@@ -18,10 +18,10 @@ split across subpackages, each with its own `README.md`:
 - `health/` — the health check interface and registry.
 
 `config.py`/`main.py`/`oidc.py`/`telemetry.py`/`problem_details.py`/
-`rate_limit.py`/`http_headers.py`/`xml_codec.py`/`web_components.py` stay
-flat, outside any subpackage — a flat module has no resource-specific
-code and no state of its own beyond what it's explicitly passed or reads
-from `app.config`.
+`rate_limit.py`/`http_headers.py`/`xml_codec.py`/`web_components.py`/
+`maintenance.py` stay flat, outside any subpackage — a flat module has no
+resource-specific code and no state of its own beyond what it's explicitly
+passed or reads from `app.config`.
 
 - `config.py` — settings, read from environment variables; see
   "Configuration" and "MODE" below.
@@ -43,19 +43,29 @@ from `app.config`.
   rendering pieces a resource's sibling routers reuse; see
   `controllers/README.md`'s "Generic CRUD router factories" section for
   the pattern.
+- `maintenance.py` — `purge_archived`, the out-of-request-path job that
+  hard-deletes rows past `Settings.archive_purge_after_days` for every
+  model carrying `app.models.mixins.Archivable`; invoked externally
+  (`python -m app.maintenance`) by a host/k8s `CronJob`, never from
+  `main.py` — see "Example CRUD resource: Hero" below and its own module
+  docstring.
 
 ## Layering
 
 Import order between all of the above is strict and one-directional —
 lower layers never import from higher ones (`config` → `rate_limit` →
-`telemetry` → `problem_details` → `oidc` → `models` → `views` →
-`repositories` → `interfaces` → `health` → `web_components` → `xml_codec` →
-`http_headers` → `controllers` → `crud_1` → `main`) — enforced by
-`import-linter`'s `layers` contract in `../../pyproject.toml`'s
+`telemetry` → `problem_details` → `oidc` → `models` → `maintenance` →
+`views` → `repositories` → `interfaces` → `health` → `web_components` →
+`xml_codec` → `http_headers` → `controllers` → `crud_1` → `main`) —
+enforced by `import-linter`'s `layers` contract in `../../pyproject.toml`'s
 `[tool.importlinter]`, run via `uv run lint-imports` (wired into
 `../../.pre-commit-config.yaml`'s manual/pre-push stage, same as mypy).
 A new subpackage or flat module gets added to that `layers` list at the
-point matching its real dependencies, not appended blindly to one end.
+point matching its real dependencies, not appended blindly to one end --
+`maintenance` sits directly above `models` (the only layer it imports from,
+besides `config`/`oidc`/`problem_details`/`telemetry`/`rate_limit` below
+that) since nothing else in `app/` imports it back (it's invoked externally,
+`python -m app.maintenance`, never from `main.py`).
 `crud_1` sits between `controllers` and `main` specifically because a
 resource package imports `controllers.crud_router`'s factories to build
 its own routers, and `main` imports the finished combined router from
@@ -64,8 +74,8 @@ its own routers, and `main` imports the finished combined router from
 ```mermaid
 graph LR
     config --> rate_limit --> telemetry --> problem_details --> oidc
-    oidc --> models --> views --> repositories --> interfaces --> health
-    health --> web_components --> xml_codec --> http_headers
+    oidc --> models --> maintenance --> views --> repositories --> interfaces
+    interfaces --> health --> web_components --> xml_codec --> http_headers
     http_headers --> controllers --> crud_1 --> main
 ```
 
@@ -333,6 +343,47 @@ ever reach heroes the caller themselves created. See
 `docs/adrs/0011-owner-scoped-crud-example-resource.md` for why this
 shape was chosen and `interfaces/README.md`'s `OwnerScope` paragraph for
 the mechanism a new per-user/per-tenant resource opts into the same way.
+
+### Record-lifecycle mixins
+
+Hero also demonstrates every opt-in record-lifecycle mixin from
+`models/mixins.py`, on `/crud/v1/heroes/v2/json` only (not the deprecated
+`v1` sibling, matching how bulk actions were rolled out as a v2-only
+capability):
+
+- **Archive** (`Archivable`): `DELETE` sets `archived_at` instead of
+  removing the row; excluded from `GET` by default, included with
+  `?include_archived=true`. `POST /restore?id=` (or with filters, in
+  bulk) clears it — same id-or-filters/single-or-bulk shape as delete.
+- **Draft** (`Draftable`): `POST /draft` accepts `HeroV2Update`'s
+  all-optional shape and persists with `is_draft=True`. `POST
+  /publish?id=` re-validates the record against `HeroV2Create` (422,
+  naming missing fields, if it still doesn't validate) and flips
+  `is_draft=False`. A plain `GET` includes drafts by default — see
+  `models/mixins.py`'s `Draftable` docstring for why this default is
+  provisional, pending a real (non-Hero) draftable resource.
+- **Scheduled publish/unpublish** (`Schedulable`): `publish_at`/
+  `unpublish_at` are plain columns, set via a normal `PATCH`; a record
+  outside that window is excluded from `GET` by default, included with
+  `?include_unpublished=true`. No background job involved — visibility
+  is computed from `datetime.now(UTC)` at query time.
+- **Scheduled purge**: `app.maintenance.purge_archived`, external to the
+  app's own request path — see `app.maintenance`'s own module docstring
+  and `Settings.archive_purge_after_days`.
+- **Duplicate/clone**: `POST /clone?id=` — generic, no mixin needed;
+  every resource gets it once it uses `build_json_router`.
+- **Lock/read-only** (`Lockable`): `is_locked` is a plain field, set via
+  a normal `PATCH`; while `True`, `app.repositories`' `update`/`delete`
+  (single or bulk) raise `RecordLockedError`, surfaced as `423 Locked` —
+  except a `PATCH` whose own body sets `is_locked=false`, which is
+  always allowed through (so unlocking never needs a dedicated route,
+  but can also edit other fields in the same request).
+- **Revision history**: `get_hero_crud` passes
+  `revisions=RepositoryRevisionSink(...)`/`resource="hero"`/`actor=...`
+  to `CRUDInterface`; every create/update/update_many/delete/delete_many
+  is logged to the shared `revisions` table (`app.models.revision.
+  Revision`). `GET /revisions?id=` returns a record's history, newest
+  first.
 
 ## Do
 

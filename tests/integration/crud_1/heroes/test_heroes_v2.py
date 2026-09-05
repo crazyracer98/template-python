@@ -264,3 +264,96 @@ def test_owner_cannot_update_or_delete_another_owners_hero_against_real_postgres
         assert still_alices.json()["powers"] == ["Weather control"]
     finally:
         client.delete("/crud/v1/heroes/v2/json", params={"id": alices_hero["id"]})
+
+
+def test_hero_draft_publish_clone_restore_and_revisions_against_real_postgres() -> None:
+    """draft -> publish -> clone -> archive -> restore -> /revisions, over the live app.
+
+    Exercises get_hero_crud's real revisions=RepositoryRevisionSink(...)/actor wiring
+    and get_hero_revision_repository (see app.crud_1.heroes.heroes_v2), neither of
+    which runs under tests/unit (get_hero_crud is always overridden there).
+    """
+    draft_response = client.post(
+        "/crud/v1/heroes/v2/json/draft", json={"name": "Postgres Draft Hero"}
+    )
+    assert draft_response.status_code == 201
+    hero = draft_response.json()
+    assert hero["is_draft"] is True
+
+    hero_ids_to_clean_up = [hero["id"]]
+    try:
+        missing_publish = client.post("/crud/v1/heroes/v2/json/publish", params={"id": -1})
+        assert missing_publish.status_code == 404
+
+        missing_clone = client.post("/crud/v1/heroes/v2/json/clone", params={"id": -1})
+        assert missing_clone.status_code == 404
+
+        incomplete_publish = client.post(
+            "/crud/v1/heroes/v2/json/publish", params={"id": hero["id"]}
+        )
+        assert incomplete_publish.status_code == 422
+
+        client.patch("/crud/v1/heroes/v2/json", params={"id": hero["id"]}, json={"powers": ["Ink"]})
+        publish_response = client.post("/crud/v1/heroes/v2/json/publish", params={"id": hero["id"]})
+        assert publish_response.status_code == 200
+        assert publish_response.json()["is_draft"] is False
+
+        clone_response = client.post("/crud/v1/heroes/v2/json/clone", params={"id": hero["id"]})
+        assert clone_response.status_code == 201
+        clone_id = clone_response.json()["id"]
+        hero_ids_to_clean_up.append(clone_id)
+
+        archive_response = client.delete("/crud/v1/heroes/v2/json", params={"id": hero["id"]})
+        assert archive_response.status_code == 204
+
+        restore_response = client.post("/crud/v1/heroes/v2/json/restore", params={"id": hero["id"]})
+        assert restore_response.status_code == 200
+
+        revisions_response = client.get(
+            "/crud/v1/heroes/v2/json/revisions", params={"id": hero["id"]}
+        )
+        assert revisions_response.status_code == 200
+        actions = [revision["action"] for revision in revisions_response.json()]
+        assert actions == ["delete", "update", "update", "create"]
+    finally:
+        for hero_id in hero_ids_to_clean_up:
+            client.delete("/crud/v1/heroes/v2/json", params={"id": hero_id})
+
+
+def test_hero_restore_missing_returns_404_against_real_postgres() -> None:
+    """POST /crud/v1/heroes/v2/json/restore?id= for a nonexistent id returns 404."""
+    response = client.post("/crud/v1/heroes/v2/json/restore", params={"id": -1})
+    assert response.status_code == 404
+
+
+def test_hero_bulk_restore_via_filters_against_real_postgres() -> None:
+    """POST /crud/v1/heroes/v2/json/restore with no id restores every matching archived hero.
+
+    Archive is soft (see app.models.mixins.Archivable), so a plain DELETE in this
+    test's own cleanup can't actually remove the row it created -- a fixed name
+    filter would keep matching this test's own past runs' now-permanently-archived
+    heroes forever. A run-unique name suffix keeps each run's filter scoped to only
+    the heroes it itself created.
+    """
+    suffix = uuid4()
+    first = client.post(
+        "/crud/v1/heroes/v2/json", json={"name": f"Bulk Restore Test A {suffix}", "powers": ["A"]}
+    ).json()
+    second = client.post(
+        "/crud/v1/heroes/v2/json", json={"name": f"Bulk Restore Test B {suffix}", "powers": ["A"]}
+    ).json()
+    try:
+        client.delete("/crud/v1/heroes/v2/json", params={"id": first["id"]})
+        client.delete("/crud/v1/heroes/v2/json", params={"id": second["id"]})
+
+        response = client.post(
+            "/crud/v1/heroes/v2/json/restore", params={"name__icontains": str(suffix)}
+        )
+        assert response.status_code == 200
+        assert response.json()["matched"] == 2
+
+        restored = client.get("/crud/v1/heroes/v2/json", params={"name__icontains": str(suffix)})
+        assert len(restored.json()) == 2
+    finally:
+        client.delete("/crud/v1/heroes/v2/json", params={"id": first["id"]})
+        client.delete("/crud/v1/heroes/v2/json", params={"id": second["id"]})

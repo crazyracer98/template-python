@@ -4,9 +4,12 @@ Uses the Hero model directly (not mocked) since InMemoryRepository is generic ov
 any IdentifiedBase subclass and Hero is already the example resource in this repo.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from app.models.hero import Hero
+from app.repositories.base import RecordLockedError
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
 from app.repositories.memory import InMemoryRepository
 
@@ -131,3 +134,93 @@ async def test_delete_many_removes_every_match(repository: InMemoryRepository[He
     )
     assert {hero.name for hero in deleted} == {"Batman", "Batgirl"}
     assert await repository.count() == 1
+
+
+async def test_lock_blocks_update_and_delete_except_the_unlocking_update(
+    repository: InMemoryRepository[Hero],
+) -> None:
+    """A locked Hero refuses update/delete (single and bulk), except an update that
+    itself sets `is_locked=False` -- see app.repositories.base.RecordLockedError.
+    """
+    locked = await repository.create(
+        {"name": "Locked Hero", "powers": ["Immovable"], "is_locked": True}
+    )
+
+    with pytest.raises(RecordLockedError):
+        await repository.update(locked.id, {"powers": ["Should not apply"]})
+    with pytest.raises(RecordLockedError):
+        await repository.delete(locked.id)
+
+    id_filter = [FilterClause("id", FilterOp.EQ, locked.id)]
+    with pytest.raises(RecordLockedError):
+        await repository.update_many(filters=id_filter, data={"powers": ["Nope"]})
+    with pytest.raises(RecordLockedError):
+        await repository.delete_many(filters=id_filter)
+
+    unlocked = await repository.update(locked.id, {"is_locked": False, "powers": ["Freed"]})
+    assert unlocked is not None
+    assert unlocked.is_locked is False
+    assert unlocked.powers == ["Freed"]
+
+
+async def test_schedulable_visibility_excludes_future_publish_and_past_unpublish(
+    repository: InMemoryRepository[Hero],
+) -> None:
+    """get()/list() exclude a not-yet-published or no-longer-published Hero by default,
+    and `include_unpublished=True` reaches it -- see app.models.mixins.Schedulable.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    not_yet_published = await repository.create(
+        {"name": "Not Yet Published", "powers": ["A"], "publish_at": now + timedelta(days=1)}
+    )
+    no_longer_published = await repository.create(
+        {"name": "No Longer Published", "powers": ["A"], "unpublish_at": now - timedelta(days=1)}
+    )
+
+    assert await repository.get(not_yet_published.id) is None
+    assert await repository.get(no_longer_published.id) is None
+    assert await repository.get(not_yet_published.id, include_unpublished=True) is not None
+    assert await repository.get(no_longer_published.id, include_unpublished=True) is not None
+
+    ids = [not_yet_published.id, no_longer_published.id]
+    id_filter = [FilterClause("id", FilterOp.IN, ids)]
+    assert await repository.list(filters=id_filter) == []
+    visible = await repository.list(filters=id_filter, include_unpublished=True)
+    assert {hero.id for hero in visible} == set(ids)
+
+
+async def test_restore_missing_returns_none(repository: InMemoryRepository[Hero]) -> None:
+    """restore() returns None for an id that doesn't exist."""
+    assert await repository.restore(999) is None
+
+
+async def test_restore_many_via_filters(repository: InMemoryRepository[Hero]) -> None:
+    """restore_many() clears archived_at on every matching row."""
+    heroes = await repository.list()
+    batman = next(hero for hero in heroes if hero.name == "Batman")
+    batgirl = next(hero for hero in heroes if hero.name == "Batgirl")
+    assert await repository.delete(batman.id) is True
+    assert await repository.delete(batgirl.id) is True
+
+    name_filter = [FilterClause("name", FilterOp.ICONTAINS, "bat")]
+    restored = await repository.restore_many(filters=name_filter)
+    assert {hero.id for hero in restored} == {batman.id, batgirl.id}
+    assert all(hero.archived_at is None for hero in restored)
+    assert await repository.get(batman.id) is not None
+
+
+async def test_delete_missing_returns_false(repository: InMemoryRepository[Hero]) -> None:
+    """delete() returns False for an id that was never created, not just an archived one."""
+    assert await repository.delete(999) is False
+
+
+async def test_restore_clears_archived_at(repository: InMemoryRepository[Hero]) -> None:
+    """restore() (single-record, not restore_many) clears archived_at and returns the record."""
+    heroes = await repository.list()
+    batman = next(hero for hero in heroes if hero.name == "Batman")
+    assert await repository.delete(batman.id) is True
+
+    restored = await repository.restore(batman.id)
+    assert restored is not None
+    assert restored.archived_at is None
+    assert await repository.get(batman.id) is not None

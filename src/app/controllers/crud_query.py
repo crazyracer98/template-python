@@ -18,8 +18,10 @@ operators. `sort=field,-other_field` is comma-separated field names, a leading
 A few branches below are `# pragma: no cover`: this module's classification is
 generic over every field kind a Pydantic schema can have, but Hero (the only
 resource wired up through the HTTP layer that `tests/integration`/`tests/e2e`
-exercise) has no Optional, bool, Enum, Literal, or plain-`date` field in its
-*read* view, so those branches can never run through the real HTTP stack.
+exercise) has no Enum, Literal, or plain-`date` field in its *read* view (it does
+now carry Optional and bool fields, from the record-lifecycle mixins -- see
+`app.models.mixins` -- so those branches are exercised for real), so those
+remaining branches can never run through the real HTTP stack.
 `tests/unit/controllers/test_crud_query.py` exercises every one of them
 directly against a standalone schema built for that purpose -- the pragma only
 affects what's counted toward the integration/e2e coverage gates, not whether
@@ -38,7 +40,7 @@ from starlette.datastructures import QueryParams
 
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
-_RESERVED_PARAMS = frozenset({"skip", "limit", "sort"})
+_RESERVED_PARAMS = frozenset({"skip", "limit", "sort", "include_archived", "include_unpublished"})
 
 # A `field__regex=` filter reaches Postgres's `~` operator (SQLAlchemyRepository) or
 # Python's re.search (InMemoryRepository) verbatim -- an unbounded pattern is a ReDoS
@@ -101,9 +103,9 @@ def _unwrap_optional(annotation: object) -> object:
     field declared `Annotated[datetime, ...]` reports its annotation as plain
     `datetime`), so only `X | None` needs unwrapping here.
     """
-    if get_origin(annotation) is Union:  # pragma: no cover -- see module docstring
+    if get_origin(annotation) is Union:
         args = [arg for arg in get_args(annotation) if arg is not type(None)]
-        if len(args) == 1:
+        if len(args) == 1:  # pragma: no cover -- see module docstring
             return args[0]
     return annotation
 
@@ -166,7 +168,7 @@ def describe_fields(schema: type[BaseModel]) -> list[FieldFilterInfo]:
     ]
 
 
-def _cast_bool(raw: str) -> bool:  # pragma: no cover -- see module docstring
+def _cast_bool(raw: str) -> bool:
     lowered = raw.strip().lower()
     if lowered in ("true", "1"):
         return True
@@ -294,11 +296,48 @@ def parse_sort(schema: type[BaseModel], params: QueryParams) -> list[SortClause]
     return clauses
 
 
+def _parse_bool_flag(params: QueryParams, key: str) -> bool:
+    """Parse a `?<key>=true|false` boolean query flag, defaulting to False when absent.
+
+    Shares `_cast_bool`'s "true"/"1"/"false"/"0" vocabulary; an unrecognized value
+    is a 400 (RequestValidationError), matching every other filter value's own
+    invalid-value handling in `parse_filters`.
+    """
+    raw = params.get(key)
+    if raw is None:
+        return False
+    try:
+        return _cast_bool(raw)
+    except ValueError as exc:
+        errors = [{"loc": ("query", key), "msg": "invalid filter value", "type": "value_error"}]
+        raise RequestValidationError(errors) from exc
+
+
+def parse_include_archived(params: QueryParams) -> bool:
+    """Parse the `?include_archived=true` flag Archivable list/get routes accept.
+
+    See app.repositories.sqlalchemy/app.repositories.memory's default-exclusion
+    logic for what this flag overrides.
+    """
+    return _parse_bool_flag(params, "include_archived")
+
+
+def parse_include_unpublished(params: QueryParams) -> bool:
+    """Parse the `?include_unpublished=true` flag Schedulable list/get routes accept.
+
+    See app.repositories.sqlalchemy/app.repositories.memory's default-exclusion
+    logic for what this flag overrides.
+    """
+    return _parse_bool_flag(params, "include_unpublished")
+
+
 __all__: Sequence[str] = (
     "FieldFilterInfo",
     "FieldSpec",
     "describe_fields",
     "field_specs",
     "parse_filters",
+    "parse_include_archived",
+    "parse_include_unpublished",
     "parse_sort",
 )

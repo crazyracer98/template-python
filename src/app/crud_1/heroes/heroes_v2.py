@@ -16,14 +16,25 @@ from typing import Annotated, Any
 from fastapi import Depends
 
 from app.controllers.crud_router import ROUTER_VERSION, build_resource_router
-from app.interfaces.base import CRUDInterface, OwnerScope
+from app.interfaces.base import CRUDInterface, OwnerScope, RepositoryRevisionSink
 from app.interfaces.dependency import build_repository_provider
 from app.models.base import DBSession
 from app.models.hero import Hero as HeroModel
+from app.models.revision import Revision
 from app.oidc import get_current_claims, require_roles
+from app.repositories.base import Repository
 from app.views.hero_v2 import HeroV2, HeroV2Create, HeroV2Update
 
 _hero_repository = build_repository_provider(HeroModel)
+_revision_repository = build_repository_provider(Revision)
+
+
+def get_hero_revision_repository(session: DBSession) -> Repository[Revision]:
+    """Return a request-scoped Repository[Revision], MODE=mock-aware like Hero's own."""
+    return _revision_repository(session)
+
+
+HeroRevisionRepository = Annotated[Repository[Revision], Depends(get_hero_revision_repository)]
 
 
 def get_hero_crud(
@@ -38,6 +49,13 @@ def get_hero_crud(
     docstring and docs/adrs/0011-owner-scoped-crud-example-resource.md for why
     Hero uses `read_scoped=False` rather than the fully-scoped default.
 
+    `revisions=RepositoryRevisionSink(...)`/`resource="hero"`/`actor=claims["sub"]`:
+    every create/update/update_many/delete/delete_many is logged to the shared
+    Revision table -- see app.interfaces.base.RevisionSink's own docstring and
+    `GET <prefix>/revisions?id=`, added below via `revision_repository_dependency`.
+    `actor` is resolved from the same per-request claims `owner` already reads,
+    the same pattern app.interfaces.README.md's "Do" section describes.
+
     MODE=mock uses the shared in-memory repository instead of `session` -- an
     unused AsyncSession's commit() never opens a connection, so `session` stays a
     harmless, uniform dependency across every mode rather than needing two
@@ -47,6 +65,9 @@ def get_hero_crud(
         schema=HeroV2,
         repository=_hero_repository(session),
         owner=OwnerScope("owner_id", claims["sub"], read_scoped=False),
+        revisions=RepositoryRevisionSink(_revision_repository(session)),
+        resource="hero",
+        actor=str(claims.get("sub", "unknown")),
     )
 
 
@@ -72,4 +93,7 @@ router = build_resource_router(
     read_roles=ReadRoles,
     write_roles=WriteRoles,
     delete_roles=DeleteRoles,
+    draft_schema=HeroV2Update,
+    archivable=True,
+    revision_repository_dependency=HeroRevisionRepository,
 )

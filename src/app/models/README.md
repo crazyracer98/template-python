@@ -16,6 +16,16 @@ subpackage.
   response can fail to see its own write — see the comment on the alias.
 - `hero.py` — the example `Hero` model; see `../README.md`'s "Example
   CRUD resource: Hero".
+- `mixins.py` — opt-in record-lifecycle mixins (`Archivable`/`Draftable`/
+  `Schedulable`/`Lockable`), each adding one plain column; a model opts in
+  with plain multiple inheritance (`class Hero(IdentifiedBase, Archivable,
+  ...)`). See `../repositories/README.md` for how `SQLAlchemyRepository`/
+  `InMemoryRepository` detect and act on these, and
+  `docs/adrs/0012-soft-delete-via-marker-column.md` for why `Archivable`
+  reuses the same row/table rather than a second archive table.
+- `revision.py` — `Revision`, the one shared (not per-resource) table
+  backing revision history; see `../interfaces/README.md`'s
+  `RevisionSink` paragraph.
 
 ## Do
 

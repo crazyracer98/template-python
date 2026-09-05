@@ -5,9 +5,14 @@ to, parameterized by a model type rather than one class per resource.
 
 - `base.py` — `Repository[ModelT]`, the `Protocol` `app.interfaces.base.
   CRUDInterface` is written against: `get`/`list`/`create`/`update`/
-  `delete`/`count`/`update_many`/`delete_many`, all storage-agnostic.
-  `list`/`update_many`/`delete_many` take `filters`/`sort` sequences from
-  `filtering.py`.
+  `delete`/`count`/`update_many`/`delete_many`/`restore`/`restore_many`,
+  all storage-agnostic. `list`/`update_many`/`delete_many` take
+  `filters`/`sort` sequences from `filtering.py`. Also `RecordLockedError`,
+  raised by `update`/`update_many`/`delete`/`delete_many` for a
+  `Lockable` (see `../models/README.md`'s `mixins.py`) record whose
+  `is_locked` is `True` — except a call whose own `data` itself sets
+  `is_locked=False`, which is always let through, so unlocking is a plain
+  `update`, never a separate bypass path.
 - `filtering.py` — `FilterOp` (the comparison operators a filter can use:
   `EQ`/`NE`/`LT`/`LTE`/`GT`/`GTE`/`IN`/`CONTAINS`/`ICONTAINS`/`REGEX`),
   `FilterClause` (one field/op/value comparison), and `SortClause` (one
@@ -33,12 +38,44 @@ to, parameterized by a model type rather than one class per resource.
   `FilterClause`/`SortClause` into plain Python predicates/`sorted()`
   instead.
 
+## Record-lifecycle mixins
+
+`get`/`list`/`count` accept `include_archived`/`include_unpublished` (both
+default `False`); `SQLAlchemyRepository`/`InMemoryRepository` detect a
+bound model's `../models/README.md`'s `mixins.py` mixins via `hasattr`
+(the same pattern already used for `created_at`/`updated_at`) and, when
+present:
+
+- `Archivable`: `delete`/`delete_many` set `archived_at` instead of
+  issuing a real delete (and, for a single `delete`/`update`, treat an
+  already-archived row as not found — `False`/`None` — same as one that
+  never existed); `restore`/`restore_many` clear it back to `None`;
+  `list`/`get`/`count` exclude a row with `archived_at` set unless
+  `include_archived=True`. `update_many`/`delete_many` apply this same
+  archived-exclusion by default too — a bulk action's filters shouldn't
+  silently reach a record a normal read can't see.
+- `Schedulable`: `list`/`get`/`count` exclude a row outside its
+  `publish_at`/`unpublish_at` window (computed from `datetime.now(UTC)`
+  at query time, never a stored boolean) unless `include_unpublished=True`.
+  Unlike `Archivable`, `update_many`/`delete_many` do *not* apply this
+  exclusion — a not-yet-or-no-longer-published row isn't deleted, just not
+  currently visible, and an editor must still be able to correct a
+  scheduled record (single `update`/`delete` also stay reachable, for the
+  same reason) before it goes live.
+- `Lockable`: see `base.py`'s `RecordLockedError`, above.
+
+A model without a given mixin is completely unaffected by all of the
+above — no behavior change for a resource that doesn't opt in.
+
 ## Do
 
 - Add a new concrete `Repository` implementation here (e.g. for a
   non-SQLAlchemy store) as its own module, matching `sqlalchemy.py`'s
   shape: one class, generic over `ModelT`, taking whatever connection/
   client it needs plus the model/collection type in its constructor.
+  Detect record-lifecycle mixins the same `hasattr` way `sqlalchemy.py`/
+  `memory.py` already do, rather than requiring every mixin to be
+  present.
 
 ## Don't
 

@@ -64,7 +64,9 @@ class _FakeWidgetRepository:
 
         return [r for r in self._records.values() if all(matches(r, c) for c in filters)]
 
-    async def get(self, record_id: int) -> _WidgetRecord | None:
+    async def get(
+        self, record_id: int, *, include_archived: bool = False, include_unpublished: bool = False
+    ) -> _WidgetRecord | None:
         """Return the record with the given id, or None if it doesn't exist."""
         return self._records.get(record_id)
 
@@ -75,6 +77,8 @@ class _FakeWidgetRepository:
         limit: int = 100,
         filters: Sequence[FilterClause] = (),
         sort: Sequence[SortClause] = (),
+        include_archived: bool = False,
+        include_unpublished: bool = False,
     ) -> list[_WidgetRecord]:
         """Return up to `limit` matching records, skipping the first `skip`."""
         matching = self._matching(filters)
@@ -85,9 +89,30 @@ class _FakeWidgetRepository:
                 )
         return matching[skip : skip + limit]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
+    async def count(
+        self,
+        *,
+        filters: Sequence[FilterClause] = (),
+        include_archived: bool = False,
+        include_unpublished: bool = False,
+    ) -> int:
         """Return how many records match the given filters."""
         return len(self._matching(filters))
+
+    async def restore(self, record_id: int) -> _WidgetRecord | None:
+        """Return the record with the given id, or None -- _WidgetRecord has no archived state.
+
+        Standing in for app.repositories.{memory,sqlalchemy}'s real Archivable-gated
+        `restore`, which is exercised directly against Hero in tests/unit/repositories/
+        test_memory.py and tests/integration/repositories/test_sqlalchemy.py -- this
+        fake only needs to prove CRUDInterface.restore's own id-lookup/owner-scoping
+        logic, not archived-column semantics.
+        """
+        return self._records.get(record_id)
+
+    async def restore_many(self, *, filters: Sequence[FilterClause]) -> Sequence[_WidgetRecord]:
+        """Return every record matching the filters -- see restore()'s own docstring above."""
+        return self._matching(filters)
 
     async def create(self, data: dict[str, Any]) -> _WidgetRecord:
         """Create and return a new record from the given field values."""
@@ -228,6 +253,27 @@ async def test_delete_many_removes_every_match(
     assert await crud.count() == 1
 
 
+async def test_restore(crud: CRUDInterface[_Widget, _WidgetRecord]) -> None:
+    """restore() returns the record as a view when the repository finds it."""
+    created = await crud.create(_WidgetCreate(label="a"))
+    restored = await crud.restore(created.id)
+    assert restored is not None
+    assert restored.id == created.id
+
+
+async def test_restore_missing_returns_none(crud: CRUDInterface[_Widget, _WidgetRecord]) -> None:
+    """restore() returns None for an id the repository can't find."""
+    assert await crud.restore(999) is None
+
+
+async def test_restore_many(crud: CRUDInterface[_Widget, _WidgetRecord]) -> None:
+    """restore_many() returns every record matching the filters, as views."""
+    await crud.create(_WidgetCreate(label="apple"))
+    await crud.create(_WidgetCreate(label="banana"))
+    restored = await crud.restore_many(filters=[FilterClause("label", FilterOp.ICONTAINS, "ap")])
+    assert {widget.label for widget in restored} == {"apple"}
+
+
 # --- OwnerScope: opt-in per-owner scoping ------------------------------------
 #
 # Two CRUDInterfaces sharing one repository, scoped to different owners, prove
@@ -313,6 +359,18 @@ async def test_owner_delete_cannot_reach_another_owners_record(
     alices = await alice_crud.create(_WidgetCreate(label="a"))
     assert await bob_crud.delete(alices.id) is False
     assert await alice_crud.get(alices.id) == alices
+
+
+async def test_owner_restore_cannot_reach_another_owners_record(
+    alice_crud: CRUDInterface[_Widget, _WidgetRecord],
+    bob_crud: CRUDInterface[_Widget, _WidgetRecord],
+) -> None:
+    """restore() returns None for another owner's record, and the record for one's own."""
+    alices = await alice_crud.create(_WidgetCreate(label="a"))
+    assert await bob_crud.restore(alices.id) is None
+    restored = await alice_crud.restore(alices.id)
+    assert restored is not None
+    assert restored.id == alices.id
 
 
 async def test_owner_update_many_only_matches_own_records(

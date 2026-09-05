@@ -1,6 +1,8 @@
 """E2E smoke test: /crud/v1/heroes/v2/json CRUD against the live api."""
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from playwright.sync_api import Page
 
@@ -248,3 +250,426 @@ def test_bulk_update_and_delete_with_no_filters_and_no_id_are_rejected(
         f"{base_url}/crud/v1/heroes/v2/json", headers=headers, fail_on_status_code=False
     )
     assert delete_response.status == 422
+
+
+def test_hero_record_lifecycle_draft_through_revisions(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """The full opt-in record-lifecycle sequence, end to end against the live api: draft ->
+    publish -> lock -> attempt (and fail) an edit -> unlock -> archive -> list (excluded) ->
+    list with include_archived -> restore -> clone -> /revisions reflects the sequence.
+    """
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    hero_ids_to_clean_up: list[int] = []
+    try:
+        draft_response = page.request.post(
+            f"{base_url}/crud/v1/heroes/v2/json/draft",
+            data={"name": "E2E Draft Hero"},
+            headers=headers,
+        )
+        assert draft_response.status == 201
+        draft = draft_response.json()
+        assert draft["is_draft"] is True
+        hero_id = draft["id"]
+        hero_ids_to_clean_up.append(hero_id)
+
+        incomplete_publish = page.request.post(
+            f"{base_url}/crud/v1/heroes/v2/json/publish",
+            params={"id": hero_id},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert incomplete_publish.status == 422
+
+        complete_response = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero_id},
+            data={"powers": ["Grappling hook"]},
+            headers=headers,
+        )
+        assert complete_response.ok
+
+        publish_response = page.request.post(
+            f"{base_url}/crud/v1/heroes/v2/json/publish", params={"id": hero_id}, headers=headers
+        )
+        assert publish_response.ok
+        assert publish_response.json()["is_draft"] is False
+
+        lock_response = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero_id},
+            data={"is_locked": True},
+            headers=headers,
+        )
+        assert lock_response.ok
+        assert lock_response.json()["is_locked"] is True
+
+        failed_edit = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero_id},
+            data={"powers": ["Should not apply"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert failed_edit.status == 423
+
+        unlock_response = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero_id},
+            data={"is_locked": False},
+            headers=headers,
+        )
+        assert unlock_response.ok
+        assert unlock_response.json()["is_locked"] is False
+
+        archive_response = page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json", params={"id": hero_id}, headers=headers
+        )
+        assert archive_response.status == 204
+
+        excluded_response = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero_id},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert excluded_response.status == 404
+
+        included_response = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero_id, "include_archived": "true"},
+            headers=headers,
+        )
+        assert included_response.ok
+        assert included_response.json()["archived_at"] is not None
+
+        restore_response = page.request.post(
+            f"{base_url}/crud/v1/heroes/v2/json/restore", params={"id": hero_id}, headers=headers
+        )
+        assert restore_response.ok
+        assert restore_response.json()["archived_at"] is None
+
+        clone_response = page.request.post(
+            f"{base_url}/crud/v1/heroes/v2/json/clone", params={"id": hero_id}, headers=headers
+        )
+        assert clone_response.status == 201
+        clone = clone_response.json()
+        hero_ids_to_clean_up.append(clone["id"])
+        assert clone["id"] != hero_id
+        assert clone["name"] == "E2E Draft Hero"
+        assert clone["powers"] == ["Grappling hook"]
+        assert clone["is_draft"] is True
+
+        revisions_response = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json/revisions", params={"id": hero_id}, headers=headers
+        )
+        assert revisions_response.ok
+        actions = [revision["action"] for revision in revisions_response.json()]
+        assert actions == ["delete", "update", "update", "update", "update", "create"]
+    finally:
+        for hero_id in hero_ids_to_clean_up:
+            page.request.delete(
+                f"{base_url}/crud/v1/heroes/v2/json",
+                params={"id": hero_id},
+                headers=headers,
+                fail_on_status_code=False,
+            )
+
+
+def test_hero_bulk_restore_via_filters(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """POST /crud/v1/heroes/v2/json/restore with no id restores every matching archived hero."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    suffix = uuid4()
+    first = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json",
+        data={"name": f"Bulk Restore E2E {suffix}", "powers": ["A"]},
+        headers=headers,
+    ).json()
+    second = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json",
+        data={"name": f"Bulk Restore E2E {suffix} B", "powers": ["A"]},
+        headers=headers,
+    ).json()
+    try:
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json", params={"id": first["id"]}, headers=headers
+        )
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json", params={"id": second["id"]}, headers=headers
+        )
+
+        response = page.request.post(
+            f"{base_url}/crud/v1/heroes/v2/json/restore",
+            params={"name__icontains": str(suffix)},
+            headers=headers,
+        )
+        assert response.ok
+        assert response.json()["matched"] == 2
+    finally:
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": first["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": second["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+
+
+def test_hero_restore_missing_returns_404(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """POST /crud/v1/heroes/v2/json/restore?id= for a nonexistent id returns 404."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    response = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json/restore",
+        params={"id": -1},
+        headers=headers,
+        fail_on_status_code=False,
+    )
+    assert response.status == 404
+
+
+def test_hero_clone_missing_returns_404(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """POST /crud/v1/heroes/v2/json/clone?id= for a nonexistent id returns 404."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    response = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json/clone",
+        params={"id": -1},
+        headers=headers,
+        fail_on_status_code=False,
+    )
+    assert response.status == 404
+
+
+def test_hero_publish_missing_returns_404(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """POST /crud/v1/heroes/v2/json/publish?id= for a nonexistent id returns 404."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    response = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json/publish",
+        params={"id": -1},
+        headers=headers,
+        fail_on_status_code=False,
+    )
+    assert response.status == 404
+
+
+def test_hero_bulk_lock_blocks_bulk_update_and_delete(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """A locked hero is skipped by neither -- bulk PATCH/DELETE against it 423s."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    suffix = uuid4()
+    hero = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json",
+        data={"name": f"E2E Bulk Locked Hero {suffix}", "powers": ["Immovable"]},
+        headers=headers,
+    ).json()
+    try:
+        page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            data={"is_locked": True},
+            headers=headers,
+        )
+
+        bulk_update = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"name__icontains": str(suffix)},
+            data={"powers": ["Should not apply"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert bulk_update.status == 423
+
+        bulk_delete = page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"name__icontains": str(suffix)},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert bulk_delete.status == 423
+    finally:
+        page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            data={"is_locked": False},
+            headers=headers,
+        )
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+
+
+def test_hero_bulk_restore_and_delete_with_no_filters_and_no_id_are_rejected(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """A bulk restore/delete/update with neither id nor filters is rejected (422)."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    restore_response = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json/restore", headers=headers, fail_on_status_code=False
+    )
+    assert restore_response.status == 422
+
+
+def test_hero_delete_and_update_by_id_while_locked_return_423(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """PATCH/DELETE ?id= for a locked hero both 423, matching bulk lock enforcement."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    hero = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json",
+        data={"name": "E2E Locked Hero", "powers": ["Immovable"]},
+        headers=headers,
+    ).json()
+    try:
+        page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            data={"is_locked": True},
+            headers=headers,
+        )
+
+        delete_response = page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert delete_response.status == 423
+    finally:
+        page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            data={"is_locked": False},
+            headers=headers,
+        )
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+
+
+def test_hero_boolean_filters_and_invalid_include_archived(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """Boolean field filters (is_draft/is_locked) and the include_archived flag both parse
+    true/false correctly, and an unrecognized include_archived value is a 422.
+    """
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    hero = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json",
+        data={"name": "E2E Boolean Filter Hero", "powers": ["A"]},
+        headers=headers,
+    ).json()
+    try:
+        not_draft = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"], "is_draft": "false"},
+            headers=headers,
+        )
+        assert not_draft.ok
+
+        not_locked = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"], "is_locked": "false", "include_archived": "false"},
+            headers=headers,
+        )
+        assert not_locked.ok
+
+        invalid_include_archived = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"], "include_archived": "maybe"},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert invalid_include_archived.status == 422
+    finally:
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+
+
+def test_hero_scheduled_visibility(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """A hero with a future publish_at or a past unpublish_at is excluded from a plain GET
+    by default, and reachable with include_unpublished=true -- see app.models.mixins.Schedulable.
+    Setting the two columns is just a normal PATCH (see views.hero_v2.HeroV2Update).
+    """
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    hero = page.request.post(
+        f"{base_url}/crud/v1/heroes/v2/json",
+        data={"name": "E2E Scheduled Hero", "powers": ["A"]},
+        headers=headers,
+    ).json()
+    try:
+        future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+        schedule_response = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            data={"publish_at": future},
+            headers=headers,
+        )
+        assert schedule_response.ok
+
+        excluded = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert excluded.status == 404
+
+        included = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"], "include_unpublished": "true"},
+            headers=headers,
+        )
+        assert included.ok
+        assert included.json()["publish_at"] is not None
+
+        # publish_at must move to the past too -- otherwise it alone would already
+        # exclude the record, without ever reaching the unpublish_at check below it.
+        past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+        further_past = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+        unpublish_response = page.request.patch(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            data={"publish_at": further_past, "unpublish_at": past},
+            headers=headers,
+        )
+        assert unpublish_response.ok
+
+        excluded_after_unpublish = page.request.get(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )
+        assert excluded_after_unpublish.status == 404
+    finally:
+        page.request.delete(
+            f"{base_url}/crud/v1/heroes/v2/json",
+            params={"id": hero["id"]},
+            headers=headers,
+            fail_on_status_code=False,
+        )

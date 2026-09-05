@@ -91,6 +91,29 @@ serves `GET <prefix>/filters`, the same per-field-type introspection
 (`app.web_components`) fetches this once to render filter/sort/bulk controls
 generically, without either side hardcoding a resource's fields.
 
+**Record-lifecycle routes** (`build_json_router` only — JSON-only for now,
+XML/web keep their original list/create/get/update/delete shape):
+`?include_archived=true`/`?include_unpublished=true` on the existing `GET`
+override the default Archivable/Schedulable exclusion (see
+`../repositories/README.md`). `POST <prefix>/clone?id=` is always added
+(fully generic, no mixin needed): it builds `create_schema` from the
+fields it itself declares, read off the existing record, so a
+Draftable/Archivable/Schedulable model's server-assigned fields are never
+copied from the source. `draft_schema` (typically a resource's own
+all-optional `*Update` view), if passed, adds `POST <prefix>/draft`
+(persists with server-assigned lifecycle defaults) and `POST
+<prefix>/publish?id=` (re-validates against `create_schema`, 422 naming
+any field still missing, then flips `is_draft=False`). `archivable=True`
+adds `POST <prefix>/restore`, mirroring delete's own id-or-filters/
+single-or-bulk shape (`app.controllers.crud_actions.resolve_restore`,
+same rate-limit/`exempt_single_record_action` treatment as the bulk
+update/delete routes). `revision_repository_dependency` + `resource`
+together add `GET <prefix>/revisions?id=`, a plain query against the
+shared `Revision` table (`app.models.revision`) — not routed through
+`crud_dependency`/`CRUDLike` at all, since it reads a different model
+entirely. See `app.crud_1.heroes.heroes_v2` for all of the above wired up
+on Hero, and `app/README.md`'s "Record-lifecycle mixins" section.
+
 The generated route functions' `crud`/`record` parameters are annotated
 with a TypeVar-bound runtime value (e.g. `create_schema`, a `type[CreateT]`
 parameter of the enclosing factory) — mypy cannot resolve that statically,

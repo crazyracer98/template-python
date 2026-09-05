@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     rate_limit_mock_token: str = "10/minute"  # noqa: S105 -- a rate-limit expression, not a secret
     rate_limit_bulk_action: str = "20/minute"
 
+    # app.maintenance.purge_archived: how old an archived row (see app.models.mixins.
+    # Archivable) must be before that out-of-request-path script hard-deletes it.
+    # None (the default) disables purge entirely -- this devcontainer-only stack has
+    # no scheduler/worker service to invoke it automatically either way (see
+    # app.maintenance's own module docstring); a real deployment sets this and wires
+    # `python -m app.maintenance` into its own host/k8s CronJob.
+    archive_purge_after_days: int | None = None
+
     postgres_user: str = "app"
     postgres_password: str = "app"  # noqa: S105 -- local Postgres default, not a real secret
     postgres_db: str = "app"

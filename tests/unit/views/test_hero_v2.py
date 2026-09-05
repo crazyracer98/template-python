@@ -16,11 +16,16 @@ class _FakeORMHero:
     """Stand-in for a SQLAlchemy Hero instance -- just needs matching attributes."""
 
     id: int
-    name: str
-    powers: list[str]
+    name: str | None
+    powers: list[str] | None
     owner_id: str
     created_at: datetime
     updated_at: datetime
+    is_draft: bool = False
+    archived_at: datetime | None = None
+    publish_at: datetime | None = None
+    unpublish_at: datetime | None = None
+    is_locked: bool = False
 
 
 def test_hero_create_accepts_valid_fields() -> None:
@@ -70,6 +75,11 @@ def test_hero_serializes_timestamps_as_ixdtf() -> None:
         name="Batman",
         powers=["Detective skills"],
         owner_id="alice",
+        is_draft=False,
+        archived_at=None,
+        publish_at=None,
+        unpublish_at=None,
+        is_locked=False,
         created_at=_NOW,
         updated_at=_NOW,
     )

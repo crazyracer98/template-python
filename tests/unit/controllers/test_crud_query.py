@@ -14,7 +14,13 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from starlette.datastructures import QueryParams
 
-from app.controllers.crud_query import describe_fields, parse_filters, parse_sort
+from app.controllers.crud_query import (
+    describe_fields,
+    parse_filters,
+    parse_include_archived,
+    parse_include_unpublished,
+    parse_sort,
+)
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
 
@@ -38,6 +44,7 @@ class _Widget(BaseModel):
     due_on: date
     created_at: Annotated[datetime, "tag"]
     nickname: str | None = None
+    mixed: int | str | None = None
 
 
 def test_describe_fields_skips_list_fields() -> None:
@@ -222,3 +229,31 @@ def test_parse_sort_unknown_field_rejected() -> None:
 def test_parse_sort_skips_blank_segments() -> None:
     """A blank segment from a trailing/doubled comma in `sort=` is ignored, not an error."""
     assert parse_sort(_Widget, QueryParams("sort=label,")) == [SortClause("label")]
+
+
+def test_describe_fields_multi_arg_union_is_unclassifiable() -> None:
+    """A Union with more than one non-None member (not a plain `X | None`) is skipped,
+    same as any other field kind `_classify` can't map -- `_unwrap_optional` only
+    unwraps a single-member union, leaving a multi-member one as-is and therefore
+    not a `type` `_classify` can `issubclass()`-check.
+    """
+    assert "mixed" not in {info.name for info in describe_fields(_Widget)}
+
+
+def test_parse_include_archived_true_and_false() -> None:
+    """?include_archived=true/false parses to the corresponding bool; absent is False."""
+    assert parse_include_archived(QueryParams("include_archived=true")) is True
+    assert parse_include_archived(QueryParams("include_archived=false")) is False
+    assert parse_include_archived(QueryParams("")) is False
+
+
+def test_parse_include_unpublished_true_and_false() -> None:
+    """?include_unpublished=true/false parses to the corresponding bool; absent is False."""
+    assert parse_include_unpublished(QueryParams("include_unpublished=true")) is True
+    assert parse_include_unpublished(QueryParams("")) is False
+
+
+def test_parse_include_archived_invalid_value_rejected() -> None:
+    """?include_archived=<not true/false/1/0> is a 400, same as an invalid boolean filter."""
+    with pytest.raises(RequestValidationError):
+        parse_include_archived(QueryParams("include_archived=maybe"))

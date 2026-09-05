@@ -38,11 +38,18 @@ def hero_v2_to_v1(hero: HeroV2) -> HeroV1:
     v1 can only represent one power; the first entry in `powers` is treated
     as the primary power. Lossy but deliberate: v1 clients keep working,
     but never see more than one power even if v2 has several.
+
+    v2's `name`/`powers` are optional (a Draftable Hero -- see
+    app.models.mixins -- may have either or both still unset); v1 predates
+    draft and has no way to represent "unset" (`name`/`superpower` are both
+    required, non-empty strings), so a still-draft field falls back to a
+    fixed placeholder rather than crashing a v1 client that lists a hero it
+    doesn't know is a draft.
     """
     return HeroV1(
         id=hero.id,
-        name=hero.name,
-        superpower=hero.powers[0],
+        name=hero.name or "(draft)",
+        superpower=(hero.powers or ["(draft)"])[0],
         created_at=hero.created_at,
         updated_at=hero.updated_at,
     )

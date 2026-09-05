@@ -2,15 +2,20 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Annotated, Any
 
+from fastapi import Depends
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
-from app.crud_1.heroes.heroes_v2 import get_hero_crud
+from app.crud_1.heroes.heroes_v2 import get_hero_crud, get_hero_revision_repository
+from app.interfaces.base import CRUDInterface, OwnerScope, RepositoryRevisionSink
 from app.main import app
 from app.models.hero import Hero as HeroModel
+from app.models.revision import Revision
 from app.oidc import get_current_claims
 from app.repositories.memory import InMemoryRepository
+from app.views.hero_v2 import HeroV2
 
 from .conftest import override_hero_crud as _override_crud
 
@@ -241,3 +246,226 @@ def test_caller_bulk_update_and_delete_do_not_reach_another_owners_hero(authed: 
         assert still_there.json()[0]["powers"] == ["Weather control"]
     finally:
         del app.dependency_overrides[get_hero_crud]
+
+
+# --- Record-lifecycle mixins: archive/draft/publish/lock/clone/revisions -----
+
+
+def _override_crud_with_revisions(
+    repository: InMemoryRepository[HeroModel], revision_repository: InMemoryRepository[Revision]
+) -> Any:  # noqa: ANN401 -- a FastAPI dependency-override callable, shape checked by the framework
+    """Build a get_hero_crud override wiring RepositoryRevisionSink, mirroring the real
+    get_hero_crud's own revisions=RepositoryRevisionSink(...) wiring (see
+    app.crud_1.heroes.heroes_v2) -- only the storage is faked.
+    """
+
+    def _build(
+        claims: Annotated[dict[str, Any], Depends(get_current_claims)],
+    ) -> CRUDInterface[HeroV2, HeroModel]:
+        return CRUDInterface(
+            schema=HeroV2,
+            repository=repository,
+            owner=OwnerScope("owner_id", claims["sub"], read_scoped=False),
+            revisions=RepositoryRevisionSink(revision_repository),
+            resource="hero",
+            actor=str(claims.get("sub", "unknown")),
+        )
+
+    return _build
+
+
+def test_hero_record_lifecycle_draft_through_revisions(authed: None) -> None:
+    """The full opt-in record-lifecycle sequence: draft -> publish -> lock -> attempt
+    (and fail) an edit -> unlock -> archive -> list (excluded) -> list with
+    include_archived -> restore -> clone -> /revisions reflects the sequence.
+    """
+    repository = InMemoryRepository(HeroModel)
+    revision_repository = InMemoryRepository(Revision)
+    app.dependency_overrides[get_hero_crud] = _override_crud_with_revisions(
+        repository, revision_repository
+    )
+    app.dependency_overrides[get_hero_revision_repository] = lambda: revision_repository
+    try:
+        draft_response = client.post("/crud/v1/heroes/v2/json/draft", json={"name": "Nightwing"})
+        assert draft_response.status_code == 201
+        draft = draft_response.json()
+        assert draft["is_draft"] is True
+        assert draft["powers"] is None
+        hero_id = draft["id"]
+
+        incomplete_publish = client.post("/crud/v1/heroes/v2/json/publish", params={"id": hero_id})
+        assert incomplete_publish.status_code == 422
+
+        complete_response = client.patch(
+            "/crud/v1/heroes/v2/json", params={"id": hero_id}, json={"powers": ["Acrobatics"]}
+        )
+        assert complete_response.status_code == 200
+
+        publish_response = client.post("/crud/v1/heroes/v2/json/publish", params={"id": hero_id})
+        assert publish_response.status_code == 200
+        assert publish_response.json()["is_draft"] is False
+
+        lock_response = client.patch(
+            "/crud/v1/heroes/v2/json", params={"id": hero_id}, json={"is_locked": True}
+        )
+        assert lock_response.status_code == 200
+        assert lock_response.json()["is_locked"] is True
+
+        failed_edit = client.patch(
+            "/crud/v1/heroes/v2/json",
+            params={"id": hero_id},
+            json={"powers": ["Should not apply"]},
+        )
+        assert failed_edit.status_code == 423
+
+        unlock_response = client.patch(
+            "/crud/v1/heroes/v2/json", params={"id": hero_id}, json={"is_locked": False}
+        )
+        assert unlock_response.status_code == 200
+        assert unlock_response.json()["is_locked"] is False
+
+        archive_response = client.delete("/crud/v1/heroes/v2/json", params={"id": hero_id})
+        assert archive_response.status_code == 204
+
+        excluded_response = client.get("/crud/v1/heroes/v2/json", params={"id": hero_id})
+        assert excluded_response.status_code == 404
+
+        included_response = client.get(
+            "/crud/v1/heroes/v2/json", params={"id": hero_id, "include_archived": "true"}
+        )
+        assert included_response.status_code == 200
+        assert included_response.json()["archived_at"] is not None
+
+        restore_response = client.post("/crud/v1/heroes/v2/json/restore", params={"id": hero_id})
+        assert restore_response.status_code == 200
+        assert restore_response.json()["archived_at"] is None
+
+        clone_response = client.post("/crud/v1/heroes/v2/json/clone", params={"id": hero_id})
+        assert clone_response.status_code == 201
+        clone = clone_response.json()
+        assert clone["id"] != hero_id
+        assert clone["name"] == "Nightwing"
+        assert clone["powers"] == ["Acrobatics"]
+        # A clone of a Draftable record is always created as a draft, regardless of the
+        # source's own (now-published) state -- see crud_router.py's clone_record.
+        assert clone["is_draft"] is True
+
+        revisions_response = client.get("/crud/v1/heroes/v2/json/revisions", params={"id": hero_id})
+        assert revisions_response.status_code == 200
+        revisions = revisions_response.json()
+        # Newest first; the clone's own "create" is filed under *its* id, not
+        # hero_id (see crud_router.py's clone_record), restore() isn't itself
+        # revision-logged (see app.interfaces.base.CRUDInterface.restore), and the
+        # locked edit above never reached a mutation -- so this hero's own log is
+        # just its own create plus every update/delete that actually applied.
+        assert [revision["action"] for revision in revisions] == [
+            "delete",
+            "update",
+            "update",
+            "update",
+            "update",
+            "create",
+        ]
+        assert all(revision["record_id"] == hero_id for revision in revisions)
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+        del app.dependency_overrides[get_hero_revision_repository]
+
+
+def test_hero_bulk_restore_via_filters(authed: None) -> None:
+    """POST /crud/v1/heroes/v2/json/restore with no id restores every matching archived hero."""
+    repository = InMemoryRepository(HeroModel)
+    app.dependency_overrides[get_hero_crud] = _override_crud(repository)
+    try:
+        first = client.post(
+            "/crud/v1/heroes/v2/json", json={"name": "Robin", "powers": ["Acrobatics"]}
+        ).json()
+        second = client.post(
+            "/crud/v1/heroes/v2/json", json={"name": "Robinhood", "powers": ["Archery"]}
+        ).json()
+        client.delete("/crud/v1/heroes/v2/json", params={"id": first["id"]})
+        client.delete("/crud/v1/heroes/v2/json", params={"id": second["id"]})
+
+        response = client.post(
+            "/crud/v1/heroes/v2/json/restore", params={"name__icontains": "Robin"}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["matched"] == 2
+        assert {first["id"], second["id"]} == set(body["ids"])
+
+        restored = client.get("/crud/v1/heroes/v2/json", params={"name__icontains": "Robin"})
+        assert len(restored.json()) == 2
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+
+
+def test_hero_restore_missing_returns_404(authed: None) -> None:
+    """POST /crud/v1/heroes/v2/json/restore?id= for a nonexistent id returns 404."""
+    app.dependency_overrides[get_hero_crud] = _override_crud(InMemoryRepository(HeroModel))
+    try:
+        response = client.post("/crud/v1/heroes/v2/json/restore", params={"id": 999})
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+    assert response.status_code == 404
+
+
+def test_hero_bulk_lock_blocks_bulk_update_and_delete(authed: None) -> None:
+    """A locked hero is skipped by neither -- bulk PATCH/DELETE against it 423s, matching
+    single-record lock enforcement, since Hero's OwnerScope routes even single-record
+    update/delete through the repository's update_many/delete_many (see
+    app.interfaces.base.OwnerScope's own docstring).
+    """
+    repository = InMemoryRepository(HeroModel)
+    app.dependency_overrides[get_hero_crud] = _override_crud(repository)
+    try:
+        hero = client.post(
+            "/crud/v1/heroes/v2/json", json={"name": "Locked Hero", "powers": ["Immovable"]}
+        ).json()
+        client.patch("/crud/v1/heroes/v2/json", params={"id": hero["id"]}, json={"is_locked": True})
+
+        bulk_update = client.patch(
+            "/crud/v1/heroes/v2/json",
+            params={"name__icontains": "Locked Hero"},
+            json={"powers": ["Should not apply"]},
+        )
+        assert bulk_update.status_code == 423
+
+        bulk_delete = client.delete(
+            "/crud/v1/heroes/v2/json", params={"name__icontains": "Locked Hero"}
+        )
+        assert bulk_delete.status_code == 423
+
+        still_there = client.get("/crud/v1/heroes/v2/json", params={"id": hero["id"]})
+        assert still_there.json()["powers"] == ["Immovable"]
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+
+
+def test_hero_delete_by_id_while_locked_returns_423(authed: None) -> None:
+    """DELETE /crud/v1/heroes/v2/json?id= for a locked hero 423s (and deletes nothing)."""
+    repository = InMemoryRepository(HeroModel)
+    app.dependency_overrides[get_hero_crud] = _override_crud(repository)
+    try:
+        hero = client.post(
+            "/crud/v1/heroes/v2/json", json={"name": "Locked Hero", "powers": ["Immovable"]}
+        ).json()
+        client.patch("/crud/v1/heroes/v2/json", params={"id": hero["id"]}, json={"is_locked": True})
+
+        response = client.delete("/crud/v1/heroes/v2/json", params={"id": hero["id"]})
+        assert response.status_code == 423
+
+        still_there = client.get("/crud/v1/heroes/v2/json", params={"id": hero["id"]})
+        assert still_there.status_code == 200
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+
+
+def test_hero_bulk_restore_with_no_filters_and_no_id_rejected(authed: None) -> None:
+    """POST /crud/v1/heroes/v2/json/restore with neither id nor filters is rejected (422)."""
+    app.dependency_overrides[get_hero_crud] = _override_crud(InMemoryRepository(HeroModel))
+    try:
+        response = client.post("/crud/v1/heroes/v2/json/restore")
+    finally:
+        del app.dependency_overrides[get_hero_crud]
+    assert response.status_code == 422

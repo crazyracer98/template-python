@@ -75,7 +75,9 @@ class _FakeGadgetRepository:
     def _matching(self, filters: Sequence[FilterClause]) -> list[_GadgetRecord]:
         return [r for r in self._records.values() if all(_matches(r, c) for c in filters)]
 
-    async def get(self, record_id: int) -> _GadgetRecord | None:
+    async def get(
+        self, record_id: int, *, include_archived: bool = False, include_unpublished: bool = False
+    ) -> _GadgetRecord | None:
         """Return the record with the given id, or None if it doesn't exist."""
         return self._records.get(record_id)
 
@@ -86,6 +88,8 @@ class _FakeGadgetRepository:
         limit: int = 100,
         filters: Sequence[FilterClause] = (),
         sort: Sequence[SortClause] = (),
+        include_archived: bool = False,
+        include_unpublished: bool = False,
     ) -> list[_GadgetRecord]:
         """Return up to `limit` matching records, skipping the first `skip`."""
         matching = self._matching(filters)
@@ -95,9 +99,23 @@ class _FakeGadgetRepository:
             )
         return matching[skip : skip + limit]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
+    async def count(
+        self,
+        *,
+        filters: Sequence[FilterClause] = (),
+        include_archived: bool = False,
+        include_unpublished: bool = False,
+    ) -> int:
         """Return how many records match the given filters."""
         return len(self._matching(filters))
+
+    async def restore(self, record_id: int) -> _GadgetRecord | None:
+        """No Archivable field on _GadgetRecord -- nothing to restore, ever."""
+        return None
+
+    async def restore_many(self, *, filters: Sequence[FilterClause]) -> Sequence[_GadgetRecord]:
+        """No Archivable field on _GadgetRecord -- nothing to restore, ever."""
+        return []
 
     async def create(self, data: dict[str, Any]) -> _GadgetRecord:
         """Create and return a new record from the given field values."""

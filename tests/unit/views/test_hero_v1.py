@@ -14,18 +14,36 @@ from app.views.hero_v2 import HeroV2, HeroV2Update
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
 
+def _hero_v2(**overrides: object) -> HeroV2:
+    """Build a HeroV2 with sensible defaults for every record-lifecycle field."""
+    defaults: dict[str, object] = {
+        "id": 1,
+        "name": "Storm",
+        "powers": ["Weather control", "Flight"],
+        "owner_id": "alice",
+        "is_draft": False,
+        "archived_at": None,
+        "publish_at": None,
+        "unpublish_at": None,
+        "is_locked": False,
+        "created_at": _NOW,
+        "updated_at": _NOW,
+    }
+    defaults.update(overrides)
+    return HeroV2(**defaults)  # type: ignore[arg-type]
+
+
 def test_hero_v2_to_v1_uses_only_the_first_power() -> None:
     """hero_v2_to_v1 on a multi-power Hero returns only the first power as `superpower`."""
-    hero = HeroV2(
-        id=1,
-        name="Storm",
-        powers=["Weather control", "Flight"],
-        owner_id="alice",
-        created_at=_NOW,
-        updated_at=_NOW,
-    )
-    v1 = hero_v2_to_v1(hero)
+    v1 = hero_v2_to_v1(_hero_v2())
     assert v1.superpower == "Weather control"
+
+
+def test_hero_v2_to_v1_falls_back_to_a_placeholder_for_a_draft() -> None:
+    """A still-draft Hero (name/powers unset) converts to v1 with a fixed placeholder."""
+    v1 = hero_v2_to_v1(_hero_v2(name=None, powers=None, is_draft=True))
+    assert v1.name == "(draft)"
+    assert v1.superpower == "(draft)"
 
 
 def test_hero_v1_create_to_v2_wraps_superpower_in_a_list() -> None:

@@ -79,6 +79,11 @@ known-first-party = ["app"]
 # assert is the point of a test, and comparing to literal expected values
 # is not a "magic number". Covers tests/ and tests/e2e/ alike.
 "tests/**" = ["S101", "PLR2004"]
+# Fake Repository fixtures mirror the real Repository protocol's
+# include_archived/include_unpublished-bearing get/list/count signatures (see the
+# src/app/repositories/*.py per-file-ignores above for the same reasoning).
+"tests/unit/controllers/test_crud_router.py" = ["S101", "PLR2004", "PLR0913"]
+"tests/unit/interfaces/test_base.py" = ["S101", "PLR2004", "PLR0913"]
 # crud_router.py's factories take one named parameter per route-building option
 # (prefix/roles/schemas/etc, PLR0913) and pass FastAPI Depends(...)/role objects
 # through untyped (ANN401) -- both are inherent to genericizing route wiring
@@ -90,6 +95,21 @@ known-first-party = ["app"]
 # taken (ANN401) -- same generic-wiring justification as crud_router.py above;
 # see the module docstring.
 "src/app/controllers/crud_actions.py" = ["ANN401", "PLR0913"]
+# Repository.get/list/count and CRUDInterface.get/list/count/CompatCRUD.get/list/
+# count all take include_archived/include_unpublished alongside their existing
+# filters/sort/skip/limit parameters (see app.models.mixins) -- one named kwarg
+# per lifecycle flag, inherent to keeping every generic query method aware of
+# both, not accidental complexity.
+"src/app/repositories/base.py" = ["PLR0913"]
+"src/app/repositories/memory.py" = ["PLR0913"]
+"src/app/repositories/sqlalchemy.py" = ["PLR0913"]
+"src/app/interfaces/base.py" = ["PLR0913"]
+"src/app/interfaces/compat.py" = ["PLR0913"]
+# test_hero_record_lifecycle_draft_through_revisions is deliberately one long,
+# linear narrative (draft -> publish -> lock -> ... -> revisions, see the plan's
+# own "Tests" section) -- splitting it into several tests would hide that it's
+# one continuous record's lifecycle, which is the point of the test.
+"tests/unit/crud_1/heroes/test_heroes_v2.py" = ["PLR0915"]
 
 [tool.importlinter]
 # Enforces src/app/CLAUDE.md's strict import order between app/'s directories: each
@@ -113,6 +133,7 @@ layers = [
     "interfaces",
     "repositories",
     "views",
+    "maintenance",
     "models",
     "oidc",
     "problem_details",
@@ -179,6 +200,13 @@ sigterm = true
 # this same absolute path from this file, so parallel data files still combine
 # correctly despite living outside the bind-mounted /workspace.
 data_file = "/home/vscode/.cache/coverage/.coverage"
+# app/maintenance.py is invoked externally (`python -m app.maintenance`), never
+# imported by the running app or by any tests/e2e journey against it -- see its
+# own module docstring. tests/integration/test_maintenance.py still imports and
+# calls it directly, so it's genuinely tested; omitting it here just means
+# neither coverage gate requires its lines to show up as executed by that
+# particular run.
+omit = ["*/app/maintenance.py"]
 
 [tool.coverage.report]
 # Single source of truth for the coverage gate: both the plain `pytest` run

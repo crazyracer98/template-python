@@ -38,6 +38,31 @@ CRUD class, only a model, a view, and a router that wires the two through
   `docs/adrs/0011-owner-scoped-crud-example-resource.md` for the full
   rationale, and `tests/unit/interfaces/test_base.py`'s `test_owner_*`/
   `test_read_scoped_*` tests for the scoped, unscoped, and open-read paths.
+  `get`/`list`/`count` also take `include_archived`/`include_unpublished`,
+  passed straight through to the repository — see `../repositories/
+  README.md`'s "Record-lifecycle mixins".
+
+  `base.py` also has `RevisionSink`, a small `Protocol`
+  (`record(*, resource, record_id, action, snapshot, actor)`) and
+  `RepositoryRevisionSink`, the concrete adapter every resource that opts
+  in actually uses — it wraps a plain `Repository[Revision]` (the same
+  `build_repository_provider`/`SQLAlchemyRepository`/`InMemoryRepository`
+  machinery every other resource uses, since `app.models.revision.
+  Revision` is just another `IdentifiedBase` model), so no bespoke storage
+  class is needed. Pass `CRUDInterface(..., revisions=RepositoryRevisionSink
+  (repo), resource="hero", actor=claims["sub"])` to log every successful
+  create/update/update_many/delete/delete_many; `revisions=None` (the
+  default) changes nothing, the same opt-in shape as `owner`. `actor` is
+  resolved from claims the same way `owner`'s `value` is — see
+  `app.crud_1.heroes.heroes_v2.get_hero_crud` for the worked example, and
+  `app.controllers.crud_router`'s `/revisions` route for reading it back.
+
+  `restore`/`restore_many` mirror `delete`/`delete_many`'s own shape
+  (id-or-filters, single-or-bulk), clearing `archived_at` instead of
+  deleting — see `../repositories/README.md`'s `Archivable` paragraph.
+  Unlike the five original mutating methods, `restore`/`restore_many`
+  don't call `revisions` (the plan they were added under scoped revision
+  logging to `create`/`update`/`update_many`/`delete`/`delete_many` only).
 - `compat.py` — `CompatCRUD`, a generic wrapper that adapts a current
   `CRUDInterface` to speak in terms of an older (deprecated) API
   version's view, via caller-supplied converter functions. The building

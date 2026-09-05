@@ -27,10 +27,17 @@ from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, ValidationError
 
 from app.config import get_settings
-from app.controllers.crud_actions import resolve_delete, resolve_list_or_get, resolve_update
+from app.controllers.crud_actions import (
+    resolve_delete,
+    resolve_list_or_get,
+    resolve_restore,
+    resolve_update,
+)
 from app.controllers.crud_query import FieldFilterInfo, describe_fields
 from app.rate_limit import exempt_single_record_action, limiter
+from app.repositories.filtering import FilterClause, FilterOp, SortClause
 from app.views.bulk import BulkDeleteResult, BulkUpdateResult
+from app.views.revision import RevisionView
 from app.web_components import render_crud_component_js, render_crud_form
 from app.xml_codec import from_xml, is_list_annotation, to_xml
 
@@ -46,6 +53,20 @@ _MAX_LIMIT = 1000
 # explicitly (see build_resource_router and docs/adrs/0009-...md) rather than
 # hardcoding "v1" independently per resource.
 ROUTER_VERSION = 1
+
+
+class _PublishFlip(BaseModel):
+    """Minimal payload flipping `is_draft` off, for `POST <prefix>/publish?id=`.
+
+    A resource's own `*Update` view (see e.g. app.views.hero_v2.HeroV2Update)
+    deliberately never exposes `is_draft` for a client to set directly through
+    the normal PATCH route -- publishing is a distinct, server-controlled
+    action. `CRUDInterface.update`'s `data.model_dump(exclude_unset=True)` only
+    needs *some* BaseModel exposing the field, not one tied to a resource's own
+    create/update schema, so one small shared model here covers every resource.
+    """
+
+    is_draft: bool = False
 
 
 def _with_dependency_headers[ResponseT: Response](
@@ -90,6 +111,10 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
     write_roles: Any,
     delete_roles: Any,
     router_dependencies: Sequence[Any] = (),
+    draft_schema: Any = None,  # type[BaseModel] | None -- see "/draft"/"/publish" below
+    archivable: bool = False,
+    revision_repository_dependency: Any = None,  # Annotated[Repository[Revision], Depends(...)]
+    resource: str | None = None,
 ) -> APIRouter:
     """Build the standard list/create/get/update/delete JSON router for one resource.
 
@@ -98,6 +123,29 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
     filtered/sorted per app.controllers.crud_query) and PATCH/DELETE act in bulk
     over whatever filters are given, rejecting an empty filter set with no `id`
     (400) so an empty query string can never target every record by accident.
+
+    `POST <prefix>/clone?id=` is always added -- fully generic, no mixin needed
+    (see docs/plans's former "Duplicate/clone" section, now folded into this
+    docstring and app/README.md): it builds `create_schema` from the fields it
+    itself declares, read off the existing record, so a Draftable/Archivable/
+    Schedulable model's own server-assigned fields (`is_draft`, `archived_at`,
+    `publish_at`, `unpublish_at` -- none of which `create_schema` ever includes)
+    are never copied from the source record.
+
+    `draft_schema` (typically a resource's own `*Update` view, all-optional),
+    if given, adds `POST <prefix>/draft` (persists with server-assigned
+    lifecycle defaults, e.g. `is_draft=True`) and `POST <prefix>/publish?id=`
+    (re-validates the record against `create_schema`, 422 naming any field
+    still missing, and flips `is_draft=False` on success).
+
+    `archivable=True` adds `POST <prefix>/restore`, mirroring delete's own
+    id-or-filters/single-or-bulk shape.
+
+    `revision_repository_dependency` + `resource` together add
+    `GET <prefix>/revisions?id=`, a plain query against the shared Revision
+    table (see app.models.revision) for that record's history, newest first --
+    not routed through `crud_dependency` at all, since it reads a different
+    model entirely.
     """
     router = APIRouter(prefix=prefix, tags=list(tags), dependencies=list(router_dependencies))
     not_found = f"{resource_label} not found"
@@ -141,6 +189,63 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
     ) -> BulkDeleteResult | Response:
         result = await resolve_delete(crud, schema, request, id=id, not_found=not_found)
         return result if result is not None else Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.post("/clone", status_code=status.HTTP_201_CREATED, dependencies=[write_roles])
+    async def clone_record(id: int, crud: crud_dependency) -> schema:  # type: ignore[valid-type] # noqa: A002
+        record = await crud.get(id)
+        if record is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
+        clone_fields = {field: getattr(record, field) for field in create_schema.model_fields}
+        clone_data = create_schema.model_validate(clone_fields)
+        return await crud.create(clone_data)  # type: ignore[no-any-return]
+
+    if draft_schema is not None:
+
+        @router.post("/draft", status_code=status.HTTP_201_CREATED, dependencies=[write_roles])
+        async def create_draft(record: draft_schema, crud: crud_dependency) -> schema:  # type: ignore[valid-type]
+            return await crud.create(record)  # type: ignore[no-any-return]
+
+        @router.post("/publish", dependencies=[write_roles])
+        async def publish_record(id: int, crud: crud_dependency) -> schema:  # type: ignore[valid-type] # noqa: A002
+            record = await crud.get(id)
+            if record is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
+            required_fields = {
+                field: getattr(record, field) for field in create_schema.model_fields
+            }
+            try:
+                create_schema.model_validate(required_fields)
+            except ValidationError as exc:
+                raise RequestValidationError(exc.errors()) from exc
+            return await crud.update(id, _PublishFlip(is_draft=False))  # type: ignore[no-any-return]
+
+    if archivable:
+
+        @router.post("/restore", dependencies=[write_roles])
+        @limiter.limit(settings.rate_limit_bulk_action, exempt_when=exempt_single_record_action)
+        async def restore_records(
+            crud: crud_dependency,
+            request: Request,
+            id: int | None = None,  # noqa: A002
+        ) -> schema | BulkUpdateResult:  # type: ignore[valid-type]
+            return await resolve_restore(crud, schema, request, id=id, not_found=not_found)  # type: ignore[no-any-return]
+
+    if revision_repository_dependency is not None and resource is not None:
+
+        @router.get("/revisions", dependencies=[read_roles])
+        async def list_revisions(
+            repository: revision_repository_dependency,
+            id: int,  # noqa: A002
+        ) -> list[RevisionView]:
+            records = await repository.list(
+                filters=[
+                    FilterClause("resource", FilterOp.EQ, resource),
+                    FilterClause("record_id", FilterOp.EQ, id),
+                ],
+                sort=[SortClause("created_at", descending=True)],
+                limit=_MAX_LIMIT,
+            )
+            return [RevisionView.model_validate(record) for record in records]
 
     return router
 
@@ -364,6 +469,9 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
     write_roles: Any,
     delete_roles: Any,
     router_dependencies: Sequence[Any] = (),
+    draft_schema: Any = None,  # type[BaseModel] | None -- see build_json_router
+    archivable: bool = False,
+    revision_repository_dependency: Any = None,  # Annotated[Repository[Revision], Depends(...)]
 ) -> APIRouter:
     """Compose build_json_router/build_xml_router/build_web_router into one resource-version router.
 
@@ -384,6 +492,11 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
     router's own `dependencies` into every route of a sub-router later
     `include_router`'d into it, so this single declaration reaches JSON/XML/web
     alike, rather than each per-format factory call repeating it.
+
+    `draft_schema`/`archivable`/`revision_repository_dependency` are forwarded to
+    `build_json_router` only -- draft/publish/restore/revisions are JSON-only for
+    now (see build_json_router's own docstring); XML/web keep their existing
+    list/create/get/update/delete shape unchanged.
     """
     full_prefix = prefix if api_prefix is None else api_prefix
     router = APIRouter(prefix=prefix, tags=list(tags), dependencies=list(router_dependencies))
@@ -399,6 +512,10 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
             read_roles=read_roles,
             write_roles=write_roles,
             delete_roles=delete_roles,
+            draft_schema=draft_schema,
+            archivable=archivable,
+            revision_repository_dependency=revision_repository_dependency,
+            resource=resource,
         ),
         prefix="/json",
     )

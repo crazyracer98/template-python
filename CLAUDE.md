@@ -48,6 +48,15 @@ Practices below are distilled from Anthropic's own Claude Code guidance
   relevant code and this file's directory-level `README.md`s (see
   "Before writing anything" above) and write a plan before editing.
   Skip planning for a change you could describe as a one-sentence diff.
+  When asked to produce a plan, write it to `docs/plans/` per
+  [`docs/plans/README.md`](docs/plans/README.md) rather than only
+  answering inline — that file also covers what happens to the plan
+  document once its work is executed (folded into an ADR/docs, or
+  removed).
+- **Report changes after executing.** After any turn that modified,
+  created, or deleted files, close with a brief commit message for the
+  user's use (a one-line summary plus a short bullet list of the most
+  important changes) — don't create the commit yourself unless asked.
 - **Verify before calling it done.** A change isn't finished until
   something has produced a pass/fail signal against it — `ruff`,
   `mypy --strict`, `pytest`, or (for e2e work) the Playwright suite —

@@ -25,7 +25,7 @@ jobs:
         run: echo "COMPOSE_PROJECT_NAME=ci-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.1.0
+        uses: docker/setup-buildx-action@v4.3.0
 
       # Warms the Buildx layer cache for the devcontainer image (the
       # `develop` stage below) before devcontainers/ci builds it via

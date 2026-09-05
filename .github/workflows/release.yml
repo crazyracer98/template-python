@@ -50,7 +50,7 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.1.0
+        uses: docker/setup-buildx-action@v4.3.0
 
       # Attached to the GitHub release below regardless of whether an OCI
       # registry is configured below -- a portable, offline-loadable

@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.crud.base import CRUDInterface
+from app.interfaces.base import CRUDInterface
 from app.repositories.filtering import FilterClause, SortClause
 
 

@@ -11,7 +11,7 @@ router = APIRouter(tags=["audit"])
 settings = get_settings()
 
 
-@router.get("/audit")
+@router.get("")
 async def audit(
     claims: Annotated[dict[str, Any], Depends(require_roles("security", "detective"))],
 ) -> dict[str, Any]:

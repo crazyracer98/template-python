@@ -22,7 +22,7 @@ class CRUDLike[SchemaT: BaseModel](Protocol):
     Lets app.controllers.crud_router's router factories depend on "anything with
     these methods" rather than concretely on CRUDInterface, so the same
     factory builds both a current-version router (backed by CRUDInterface) and a
-    deprecated one (backed by app.crud.compat.CompatCRUD) identically.
+    deprecated one (backed by app.interfaces.compat.CompatCRUD) identically.
     """
 
     async def get(self, record_id: int) -> SchemaT | None:

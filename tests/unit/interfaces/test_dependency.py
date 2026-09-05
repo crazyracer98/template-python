@@ -5,8 +5,8 @@ from typing import cast
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud import dependency as dependency_module
-from app.crud.dependency import build_repository_provider
+from app.interfaces import dependency as dependency_module
+from app.interfaces.dependency import build_repository_provider
 from app.models.hero import Hero as HeroModel
 from app.repositories.memory import InMemoryRepository
 from app.repositories.sqlalchemy import SQLAlchemyRepository

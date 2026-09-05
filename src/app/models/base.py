@@ -33,7 +33,7 @@ class Base(DeclarativeBase):
 class IdentifiedBase(Base):
     """Base for models with a single-column integer primary key named `id`.
 
-    Repository/CRUD generics (see app.repositories and app.crud) are bound to this
+    Repository/CRUD generics (see app.repositories and app.interfaces) are bound to this
     type so they can order/select by `id` without each model redeclaring the column.
     Also carries `created_at`/`updated_at`, server-assigned in Postgres and set by
     hand in app.repositories.memory.InMemoryRepository (MODE=mock has no server to

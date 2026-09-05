@@ -1,10 +1,14 @@
 """HTTP routes for the current (v2) Hero resource -- a worked example of the generic CRUD interface.
 
-One `build_resource_router` call builds the JSON/XML/web sibling routes together
-under `/crud/v{ROUTER_VERSION}/heroes/v2/{json,xml,web}` -- see
+One `build_resource_router` call builds the JSON/XML/web sibling routes
+together. `prefix=""` here deliberately: this router carries none of its
+own mount prefix -- `app.crud_1.heroes`'s `__init__.py` is the one that
+assigns `/heroes/v2` explicitly, via `include_router(router, prefix=...)`,
+when it combines this with the deprecated `heroes_v1.py` sibling into the
+one `router` `app.crud_1` mounts. See `crud_1/README.md`'s "Don't" section
+for why a resource-version router should never bake in its own prefix.
+`api_prefix` is still the full absolute path, though -- see
 `crud_router.py`'s "Generic CRUD router factories" and `docs/adrs/0009-...md`.
-`app.resources.heroes`'s `__init__.py` combines this with the deprecated
-`heroes_v1.py` sibling into the one `router` mounted in `main.py`.
 """
 
 from typing import Annotated
@@ -12,8 +16,8 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.controllers.crud_router import ROUTER_VERSION, build_resource_router
-from app.crud.base import CRUDInterface
-from app.crud.dependency import build_repository_provider
+from app.interfaces.base import CRUDInterface
+from app.interfaces.dependency import build_repository_provider
 from app.models.base import DBSession
 from app.models.hero import Hero as HeroModel
 from app.oidc import require_roles
@@ -40,7 +44,8 @@ WriteRoles = Depends(require_roles("editor", "maintainer"))
 DeleteRoles = Depends(require_roles("maintainer"))
 
 router = build_resource_router(
-    prefix=f"/crud/v{ROUTER_VERSION}/heroes/v2",
+    prefix="",
+    api_prefix=f"/crud/v{ROUTER_VERSION}/heroes/v2",
     tags=["heroes"],
     resource_label="Hero",
     resource="hero",

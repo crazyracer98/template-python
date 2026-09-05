@@ -1,7 +1,7 @@
 """Unit test: build_json_router/build_xml_router/build_web_router's generic route wiring.
 
 Exercises the three router factories directly against a minimal fake schema/model
-pair, not tied to Hero -- mirrors how tests/unit/crud/test_compat.py tests
+pair, not tied to Hero -- mirrors how tests/unit/interfaces/test_compat.py tests
 CompatCRUD generically.
 """
 
@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.controllers import crud_actions
 from app.controllers.crud_router import build_json_router, build_web_router, build_xml_router
-from app.crud.base import CRUDInterface
+from app.interfaces.base import CRUDInterface
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
 

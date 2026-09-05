@@ -1,4 +1,4 @@
-# app/crud/
+# app/interfaces/
 
 The generic CRUD interface: feed it a view (`app.views`) and a
 repository (`app.repositories`) to persist it through, and it exposes
@@ -32,7 +32,7 @@ CRUD class, only a model, a view, and a router that wires the two through
   `InMemoryRepository` (MODE=mock, built once and shared across requests)
   vs. a request-scoped `SQLAlchemyRepository`. Returns a
   `Callable[[AsyncSession], Repository[ModelT]]` a controller calls with
-  its request's session — see `app.resources.heroes` for the pattern.
+  its request's session — see `app.crud_1.heroes` for the pattern.
   The route-level factories built on top of `CRUDInterface`/`CompatCRUD`
   (`build_json_router`/`build_xml_router`/`build_web_router`) live in
   `../controllers/crud_router.py`, one layer up — see `../controllers/
@@ -42,7 +42,7 @@ CRUD class, only a model, a view, and a router that wires the two through
 
 - Build one `CRUDInterface` per request, in the controller, from the
   concrete view and `build_repository_provider(Model)(session)` — see
-  `app.resources.heroes.get_hero_crud` for the pattern.
+  `app.crud_1.heroes.get_hero_crud` for the pattern.
 
 ## Don't
 

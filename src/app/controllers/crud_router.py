@@ -1,7 +1,7 @@
 """Generic FastAPI router factories for a resource's CRUD endpoints.
 
 Parameterized by a resource's Pydantic views and an already-built CRUD
-dependency (app.crud.base.CRUDLike) -- covers both a current version
+dependency (app.interfaces.base.CRUDLike) -- covers both a current version
 (CRUDInterface) and a deprecated one (CompatCRUD) identically, since
 both satisfy CRUDLike structurally. Each factory builds its route
 functions internally as closures over its arguments: the generated
@@ -349,6 +349,7 @@ def build_web_router[CreateT: BaseModel](
 def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel](
     *,
     prefix: str,
+    api_prefix: str | None = None,
     tags: Sequence[str],
     resource_label: str,
     resource: str,
@@ -366,11 +367,17 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
 ) -> APIRouter:
     """Compose build_json_router/build_xml_router/build_web_router into one resource-version router.
 
-    `prefix` is the resource-version's full prefix (e.g. `/crud/v1/heroes/v2`, see
+    `prefix` is this router's own prefix, resource-relative to wherever a caller
+    later mounts the returned router (e.g. `/heroes/v2`, see
     docs/adrs/0009-...md) -- each format is mounted under it as its own explicit,
-    non-empty `/json`/`/xml`/`/web` sub-prefix, so the returned router already
-    carries its complete path and is mounted at the call site with a bare
-    `include_router(router)` -- no further prefix to add there.
+    non-empty `/json`/`/xml`/`/web` sub-prefix.
+
+    `api_prefix` is the full, browser-reachable path to this router's `/json`
+    sub-router (e.g. `/crud/v1/heroes/v2`) -- used only to compute
+    `build_web_router`'s `api_base`, which gets baked into rendered HTML/JS at
+    build time and so can't be derived from a later `include_router` call's own
+    prefix the way FastAPI's own routing can. Defaults to `prefix`, for a router
+    mounted with no further outer prefix.
 
     `router_dependencies` (e.g. app.http_headers.sunset(...) for a deprecated
     version) is applied once, on this router's own constructor -- FastAPI merges a
@@ -378,6 +385,7 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
     `include_router`'d into it, so this single declaration reaches JSON/XML/web
     alike, rather than each per-format factory call repeating it.
     """
+    full_prefix = prefix if api_prefix is None else api_prefix
     router = APIRouter(prefix=prefix, tags=list(tags), dependencies=list(router_dependencies))
     router.include_router(
         build_json_router(
@@ -416,7 +424,7 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
             prefix="",
             tags=tags,
             resource=resource,
-            api_base=f"{prefix}/json",
+            api_base=f"{full_prefix}/json",
             fields=fields,
             create_schema=create_schema,
             crud_dependency=crud_dependency,

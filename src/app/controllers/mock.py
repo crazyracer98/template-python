@@ -35,7 +35,7 @@ class MockTokenRequest(BaseModel):
     roles: list[str] = []
 
 
-@router.post("/mock/token")
+@router.post("/token")
 @limiter.limit(settings.rate_limit_mock_token)
 async def issue_mock_token(payload: MockTokenRequest, request: Request) -> dict[str, Any]:
     """Issue a mock access token carrying the given subject and client roles.

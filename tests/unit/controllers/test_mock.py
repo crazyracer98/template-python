@@ -11,7 +11,9 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.controllers.mock import router
 
-client = TestClient(FastAPI(routes=router.routes))
+app = FastAPI()
+app.include_router(router, prefix="/mock")
+client = TestClient(app)
 
 
 def test_issue_mock_token_carries_the_given_sub_and_roles() -> None:

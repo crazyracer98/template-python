@@ -1,4 +1,4 @@
-"""Generic repository protocol: the storage-agnostic contract app.crud talks to."""
+"""Generic repository protocol: the storage-agnostic contract app.interfaces talks to."""
 
 from collections.abc import Sequence
 from typing import Any, Protocol

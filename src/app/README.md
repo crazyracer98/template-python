@@ -8,12 +8,13 @@ split across subpackages, each with its own `README.md`:
 - `controllers/` — the Controller layer: the generic CRUD router
   factories, plus FastAPI routers with no resource of their own
   (health/auth/audit/mock).
-- `resources/` — one subpackage per resource (e.g. `heroes/`), each
+- `crud_1/` — one subpackage per resource (e.g. `heroes/`), each
   combining its versioned sibling routers (built from `controllers/`'s
-  factories) into the one router `main.py` mounts; see its own
-  `README.md`.
-- `repositories/` — storage-agnostic CRUD access, backing `crud/`.
-- `crud/` — the generic CRUD interface built from a view + a repository.
+  factories) into one router, all combined into the single router
+  `main.py` mounts at `/crud/v{ROUTER_VERSION}`; see its own `README.md`.
+- `repositories/` — storage-agnostic CRUD access, backing `interfaces/`.
+- `interfaces/` — the generic CRUD interface built from a view + a
+  repository.
 - `health/` — the health check interface and registry.
 
 `config.py`/`main.py`/`oidc.py`/`telemetry.py`/`problem_details.py`/
@@ -48,24 +49,24 @@ from `app.config`.
 Import order between all of the above is strict and one-directional —
 lower layers never import from higher ones (`config` → `rate_limit` →
 `telemetry` → `problem_details` → `oidc` → `models` → `views` →
-`repositories` → `crud` → `health` → `web_components` → `xml_codec` →
-`http_headers` → `controllers` → `resources` → `main`) — enforced by
+`repositories` → `interfaces` → `health` → `web_components` → `xml_codec` →
+`http_headers` → `controllers` → `crud_1` → `main`) — enforced by
 `import-linter`'s `layers` contract in `../../pyproject.toml`'s
 `[tool.importlinter]`, run via `uv run lint-imports` (wired into
 `../../.pre-commit-config.yaml`'s manual/pre-push stage, same as mypy).
 A new subpackage or flat module gets added to that `layers` list at the
 point matching its real dependencies, not appended blindly to one end.
-`resources` sits between `controllers` and `main` specifically because a
+`crud_1` sits between `controllers` and `main` specifically because a
 resource package imports `controllers.crud_router`'s factories to build
-its own routers, and `main` imports the finished per-resource router
-from `resources` rather than reaching into `controllers` for it.
+its own routers, and `main` imports the finished combined router from
+`crud_1` rather than reaching into `controllers` for it.
 
 ```mermaid
 graph LR
     config --> rate_limit --> telemetry --> problem_details --> oidc
-    oidc --> models --> views --> repositories --> crud --> health
+    oidc --> models --> views --> repositories --> interfaces --> health
     health --> web_components --> xml_codec --> http_headers
-    http_headers --> controllers --> resources --> main
+    http_headers --> controllers --> crud_1 --> main
 ```
 
 An arrow means "may import from" — each module may depend on anything
@@ -189,8 +190,8 @@ not a per-request one.
   default.
 
 A resource that wants `MODE=mock` support builds its CRUD dependency from
-`app.crud.dependency.build_repository_provider(Model)` the way
-`resources.heroes.heroes_v2.get_hero_crud` does — keep the dependency's signature
+`app.interfaces.dependency.build_repository_provider(Model)` the way
+`crud_1.heroes.heroes_v2.get_hero_crud` does — keep the dependency's signature
 identical across modes (an unused `AsyncSession`'s `commit()` never opens
 a connection, so taking `app.models.base.DBSession` unconditionally and letting
 `build_repository_provider` branch on `settings.mode` internally is both
@@ -221,7 +222,7 @@ extra={"access_token": ...})` can't leak it into stdout/OTLP verbatim.
 
 `problem_details.py`'s `register_problem_handlers(app)` (called once
 from `main.py`) turns every `HTTPException` (raised anywhere, e.g.
-`resources/heroes/heroes_v2.py`'s `raise HTTPException(status.
+`crud_1/heroes/heroes_v2.py`'s `raise HTTPException(status.
 HTTP_404_NOT_FOUND, ...)`, unchanged), FastAPI's request validation
 errors, and any other unhandled exception into a single consistent
 `application/problem+json` body — no route needs to build this itself.
@@ -275,23 +276,23 @@ against a throwaway `Limiter` instead.
 
 ## Example CRUD resource: Hero
 
-`models/hero.py` / `views/hero_v2.py` / `resources/heroes/heroes_v2.py` are a
+`models/hero.py` / `views/hero_v2.py` / `crud_1/heroes/heroes_v2.py` are a
 worked example of the generic CRUD interface, wired up as
 `/crud/v1/heroes/v2/json` (list/create/get/update/delete — see
-`resources/heroes/heroes_v2.py`; `/xml` and `/web` siblings also exist, see
+`crud_1/heroes/heroes_v2.py`; `/xml` and `/web` siblings also exist, see
 `controllers/README.md`'s "Generic CRUD router factories"). Adding
 another resource follows the same three-file shape: an `IdentifiedBase`
 subclass in `models/`, an `ORMView` subclass (plus `*Create`/`*Update`
 variants) in `views/`, and a router in `controllers/` that builds a
 `CRUDInterface(schema=<View>, repository=SQLAlchemyRepository(session,
-<Model>))` per request — see `crud/README.md` and
+<Model>))` per request — see `interfaces/README.md` and
 `repositories/README.md` for what each side of that call does.
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Controller as resources/heroes/heroes_v2.py
-    participant CRUD as crud/base.py (CRUDInterface)
+    participant Controller as crud_1/heroes/heroes_v2.py
+    participant CRUD as interfaces/base.py (CRUDInterface)
     participant Repo as repositories/sqlalchemy.py
     participant DB as Postgres
 

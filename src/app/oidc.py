@@ -9,7 +9,7 @@ using TestClient) never requires a running OIDC provider.
 
 Also require_roles, a Keycloak-shaped RBAC dependency (reads the
 resource_access.<client>.roles claim Keycloak's client-role mapper populates --
-see app.resources.heroes/audit for routes that use it, and
+see app.crud_1.heroes/audit for routes that use it, and
 app.controllers.mock for how MODE=mock issues tokens carrying that same shape).
 """
 

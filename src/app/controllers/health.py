@@ -9,13 +9,13 @@ from app.health.registry import HealthRegistry, get_health_registry
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health/live")
+@router.get("/live")
 async def live() -> dict[str, str]:
     """Liveness probe: the process is up and serving requests. Never checks dependencies."""
     return {"status": "ok"}
 
 
-@router.get("/health/ready")
+@router.get("/ready")
 async def ready(
     response: Response,
     registry: Annotated[HealthRegistry, Depends(get_health_registry)],

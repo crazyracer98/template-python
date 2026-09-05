@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from app.crud.base import CRUDInterface
+from app.interfaces.base import CRUDInterface
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
 

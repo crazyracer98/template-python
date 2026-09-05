@@ -1,6 +1,6 @@
 """Example authenticated route, demonstrating app.oidc's auth dependency.
 
-Superseded by the role-scoped routes in app.resources.heroes/audit, which
+Superseded by the role-scoped routes in app.crud_1.heroes/audit, which
 demonstrate app.oidc.require_roles instead of bare authentication -- marked
 sunset accordingly (see app.http_headers).
 """
@@ -17,7 +17,7 @@ router = APIRouter(tags=["protected"])
 
 
 @router.get(
-    "/protected",
+    "",
     dependencies=[Depends(sunset(datetime(2027, 1, 1, tzinfo=UTC), link="/v2/heroes"))],
 )
 # Gated by get_current_claims only (authenticated, no role check) -- fine for this

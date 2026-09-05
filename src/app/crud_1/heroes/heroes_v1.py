@@ -1,11 +1,16 @@
-"""HTTP routes for /crud/v{ROUTER_VERSION}/heroes/v1 -- the deprecated single-power Hero shape.
+"""HTTP routes for the deprecated (v1), single-power Hero shape.
 
-Deprecated in favor of /crud/v{ROUTER_VERSION}/heroes/v2 (heroes_v2.py), which
-supports multiple powers per hero. Wraps the same CRUD heroes_v2.py already
-builds via app.crud.compat.CompatCRUD, converting to/from the v1 view with
+Deprecated in favor of heroes_v2.py, which supports multiple powers per
+hero. Wraps the same CRUD heroes_v2.py already builds via
+app.interfaces.compat.CompatCRUD, converting to/from the v1 view with
 app.views.hero_v1's converter functions -- no new persistence code, only the
-version-compatibility shape. `app.resources.heroes`'s `__init__.py` combines
-this with heroes_v2.py's router into the one `router` mounted in `main.py`.
+version-compatibility shape. `prefix=""` below: this router carries none of
+its own mount prefix -- `app.crud_1.heroes`'s `__init__.py` assigns
+`/heroes/v1` explicitly, via `include_router(router, prefix=...)`, when it
+combines this with heroes_v2.py's router into the one `router` `app.crud_1`
+mounts at `/crud/v{ROUTER_VERSION}` in `main.py`. See `crud_1/README.md`'s
+"Don't" section for why a resource-version router should never bake in its
+own prefix.
 """
 
 from datetime import UTC, datetime
@@ -14,10 +19,10 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.controllers.crud_router import ROUTER_VERSION, build_resource_router
-from app.crud.compat import CompatCRUD
+from app.crud_1.heroes.heroes_v2 import DeleteRoles, HeroCRUD, ReadRoles, WriteRoles
 from app.http_headers import sunset
+from app.interfaces.compat import CompatCRUD
 from app.models.hero import Hero as HeroModel
-from app.resources.heroes.heroes_v2 import DeleteRoles, HeroCRUD, ReadRoles, WriteRoles
 from app.views.hero_v1 import (
     HeroV1,
     HeroV1Create,
@@ -45,7 +50,8 @@ def get_hero_v1_crud(crud: HeroCRUD) -> CompatCRUD[HeroV1, HeroV2, HeroModel]:
 HeroV1CRUD = Annotated[CompatCRUD[HeroV1, HeroV2, HeroModel], Depends(get_hero_v1_crud)]
 
 router = build_resource_router(
-    prefix=f"/crud/v{ROUTER_VERSION}/heroes/v1",
+    prefix="",
+    api_prefix=f"/crud/v{ROUTER_VERSION}/heroes/v1",
     tags=["heroes"],
     resource_label="Hero",
     resource="hero",

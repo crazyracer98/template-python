@@ -2,11 +2,11 @@
 
 from fastapi.testclient import TestClient
 
-from app.crud.base import CRUDInterface
+from app.crud_1.heroes.heroes_v2 import get_hero_crud
+from app.interfaces.base import CRUDInterface
 from app.main import app
 from app.models.hero import Hero as HeroModel
 from app.repositories.memory import InMemoryRepository
-from app.resources.heroes.heroes_v2 import get_hero_crud
 from app.views.hero_v2 import HeroV2
 
 client = TestClient(app)

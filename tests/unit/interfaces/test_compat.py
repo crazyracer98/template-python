@@ -1,6 +1,6 @@
 """Unit test: CompatCRUD's generic get/list/create/update/delete conversion logic.
 
-Reuses tests/unit/crud/test_base.py's in-memory fake Repository and standalone
+Reuses tests/unit/interfaces/test_base.py's in-memory fake Repository and standalone
 Pydantic view, wrapped in a small "legacy" view/converter pair, not tied to Hero at
 all, to prove the wrapper is genuinely generic.
 """
@@ -8,10 +8,15 @@ all, to prove the wrapper is genuinely generic.
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from app.crud.base import CRUDInterface
-from app.crud.compat import CompatCRUD
+from app.interfaces.base import CRUDInterface
+from app.interfaces.compat import CompatCRUD
 from app.repositories.filtering import FilterClause, FilterOp
-from tests.unit.crud.test_base import _FakeWidgetRepository, _Widget, _WidgetCreate, _WidgetUpdate
+from tests.unit.interfaces.test_base import (
+    _FakeWidgetRepository,
+    _Widget,
+    _WidgetCreate,
+    _WidgetUpdate,
+)
 
 
 class _LegacyWidget(BaseModel):

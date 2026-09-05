@@ -2,10 +2,10 @@
 
 The Controller layer: the generic CRUD router factories every resource
 builds on, plus the handful of FastAPI routers with no resource of their
-own. A resource's own router (e.g. Hero) lives in `../resources/`
-instead — see its `README.md`. Sits below `resources` and `main` in
+own. A resource's own router (e.g. Hero) lives in `../crud_1/`
+instead — see its `README.md`. Sits below `crud_1` and `main` in
 `src/app/`'s import order — may import from any other `app/` subpackage,
-but only `resources`/`main` may import from here (see `../README.md`'s
+but only `crud_1`/`main` may import from here (see `../README.md`'s
 "Layering" section).
 
 - `health.py` — `/health/live` and `/health/ready`.
@@ -24,7 +24,7 @@ Add a role requirement to a route with `dependencies=[Depends
 (require_roles("editor", "maintainer"))]` from `app.oidc` (see
 `../README.md`'s "RBAC" section for the mechanism), or a module-level
 `Depends(...)` constant reused across a router's routes — see
-`app.resources.heroes.heroes_v2`'s `ReadRoles`/`WriteRoles`/`DeleteRoles`.
+`app.crud_1.heroes.heroes_v2`'s `ReadRoles`/`WriteRoles`/`DeleteRoles`.
 
 ## Generic CRUD router factories
 
@@ -34,20 +34,29 @@ build a resource's list/create/get/update/delete routes (or, for
 closures over the Pydantic views and CRUD dependency passed to them.
 `build_resource_router` composes all three into one resource-version's
 combined `APIRouter`, mounting each under its own `/json`/`/xml`/`/web`
-sub-prefix — `app.resources.heroes`'s `heroes_v2.py`/`heroes_v1.py` are
+sub-prefix — `app.crud_1.heroes`'s `heroes_v2.py`/`heroes_v1.py` are
 one `build_resource_router(...)` call each, not three separate
-per-format router modules; see `../resources/README.md`'s "API and model
-versioning" and `docs/adrs/0009-...md` for the full path shape. Each
-factory takes `crud_dependency` as an
-`Annotated[app.crud.base.CRUDLike[...], Depends(...)]`-shaped value —
+per-format router modules; see `../crud_1/README.md`'s "API and model
+versioning" and `docs/adrs/0009-...md` for the full path shape. Its own
+`prefix` argument should always be `""` — the caller's own resource
+package (e.g. `heroes/__init__.py`) is where the real, resource-relative
+prefix gets assigned, explicitly, at the `include_router` call that
+mounts the returned router; see `../crud_1/README.md`'s "Don't" section
+for why a resource-version router baking its own prefix in here is bad
+design. `api_prefix` is separate and still needed as the full absolute
+path (e.g. `/crud/v1/heroes/v2`) — it only feeds `build_web_router`'s
+`api_base`, which gets baked into rendered HTML/JS at build time and
+can't be derived from a later `include_router` call's prefix the way
+FastAPI's own routing can. Each factory takes `crud_dependency` as an
+`Annotated[app.interfaces.base.CRUDLike[...], Depends(...)]`-shaped value —
 `CRUDLike` is a `Protocol` both `CRUDInterface` (current version) and
-`CompatCRUD` (deprecated version, see `../resources/README.md`'s "API
+`CompatCRUD` (deprecated version, see `../crud_1/README.md`'s "API
 and model versioning") satisfy structurally, so the same factories build
 both.
 
 `crud_router.py`'s `ROUTER_VERSION` constant names a version of these
 factories' own route shape/behavior, not any resource's shape — see
-`../resources/README.md`'s "API and model versioning" for the full
+`../crud_1/README.md`'s "API and model versioning" for the full
 three-axis path scheme this feeds into.
 
 **Record addressing, filtering/sorting, and bulk actions** (`build_json_router`/
@@ -85,13 +94,13 @@ parameter of the enclosing factory) — mypy cannot resolve that statically,
 so those specific lines carry a narrow `# type: ignore[valid-type]`/
 `# type: ignore[no-any-return]`, justified by `crud_router.py`'s own module
 docstring; the factories' own public signatures stay fully strict-typed, so
-a caller like `app.resources.heroes.heroes_v2` gets normal type-checking on
+a caller like `app.crud_1.heroes.heroes_v2` gets normal type-checking on
 its `build_resource_router(...)` call.
 
 `build_xml_router`/`build_web_router`'s routes construct and return their
 own `Response`/`RedirectResponse` directly (XML bodies, redirects, JS) —
 FastAPI does **not** merge a `dependencies=[...]` entry's `response.headers`
-mutations (e.g. `app.http_headers.sunset(...)`, see `../resources/README.md`'s
+mutations (e.g. `app.http_headers.sunset(...)`, see `../crud_1/README.md`'s
 "API and model versioning") into a route's own returned `Response`, only into
 its own auto-built one, so every such route also takes the injected
 `response: Response` and merges it in via `crud_router.py`'s private
@@ -111,15 +120,15 @@ body.
 
 - Add a resource-agnostic router-building helper (usable by any future
   resource) to `crud_router.py` — a resource-specific router belongs in
-  `../resources/` instead, see its `README.md`.
+  `../crud_1/` instead, see its `README.md`.
 - Add auth to a route with `Depends(get_current_claims)` from
   `app.oidc` — a route with no such dependency is public.
 
 ## Don't
 
 - Put persistence or conversion logic directly in a route body — that
-  belongs in `app.crud`/`app.repositories`; a route should stay a thin
+  belongs in `app.interfaces`/`app.repositories`; a route should stay a thin
   translation between HTTP and a `CRUDInterface` call.
 - Add a resource's own router module here — resources live in
-  `../resources/` so `controllers/` stays generic, reusable machinery
+  `../crud_1/` so `controllers/` stays generic, reusable machinery
   only.

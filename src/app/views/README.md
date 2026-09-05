@@ -5,7 +5,7 @@ The View layer: Pydantic schemas returned by and accepted from
 
 - `base.py` — `ORMView`, the base every view inherits from
   (`model_config = ConfigDict(from_attributes=True)`, which is what lets
-  `app.crud.base.CRUDInterface` build one straight from a SQLAlchemy
+  `app.interfaces.base.CRUDInterface` build one straight from a SQLAlchemy
   model instance via `model_validate`), and `IXDTFDatetime` (see below).
 - `hero_v2.py` — the current (v2) Hero views; see `../README.md`'s
   "Example CRUD resource: Hero".
@@ -30,7 +30,7 @@ HTTP-date-formatted, `Sunset` header.
 ## Do
 
 - Subclass `ORMView`, not `pydantic.BaseModel` directly, for any view
-  `app.crud.base.CRUDInterface` will build from an ORM instance.
+  `app.interfaces.base.CRUDInterface` will build from an ORM instance.
 - Give a resource three views following `hero_v2.py`'s shape: `*Create`
   (fields accepted on create), `*Update` (the same fields, all
   `| None = None`, for partial updates), and the plain name (the full
@@ -45,7 +45,7 @@ HTTP-date-formatted, `Sunset` header.
 
 ## Don't
 
-- Import from `app.models`, `app.repositories`, `app.crud`,
+- Import from `app.models`, `app.repositories`, `app.interfaces`,
   `app.health`, or `app.controllers` — see `../README.md`'s "Layering"
   section. A view converts to/from an ORM instance structurally
   (`from_attributes`), never by importing the model class.

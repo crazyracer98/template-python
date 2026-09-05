@@ -1,1 +1,1 @@
-"""Storage-agnostic CRUD repositories that app.crud's generic interface talks to."""
+"""Storage-agnostic CRUD repositories that app.interfaces' generic interface talks to."""

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.controllers.crud_query import parse_filters, parse_sort
-from app.crud.base import CRUDLike
+from app.interfaces.base import CRUDLike
 from app.repositories.filtering import FilterClause
 from app.views.bulk import BulkDeleteResult, BulkUpdateResult
 

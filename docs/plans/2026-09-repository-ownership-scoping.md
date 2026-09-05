@@ -13,7 +13,7 @@ bulk-update/delete any record of a resource, regardless of who created
 it. Not a problem for the single-tenant Hero example (nothing in this
 app is "owned" by a specific user today), but a future resource with
 per-user data (e.g. a user's own draft posts, a tenant's own records)
-would silently inherit this — nothing in `app.repositories`/`app.crud`
+would silently inherit this — nothing in `app.repositories`/`app.interfaces`
 stops a broader-than-intended query, and there's no established pattern
 to reach for. This plan exists so that decision gets made deliberately,
 against a real resource, rather than retrofitted under pressure once one
@@ -34,7 +34,7 @@ added, not before:
      threaded through `list`/`count`/`update_many`/`delete_many`,
      applied by `SQLAlchemyRepository`/`InMemoryRepository` alongside
      the caller-supplied filters from `app.controllers.crud_query`.
-   - `app.crud.base.CRUDInterface`: wrap construction so a resource
+   - `app.interfaces.base.CRUDInterface`: wrap construction so a resource
      opts in by passing an `owner_field`/`owner_value` (or a
      `Callable[[claims], FilterClause]`) at CRUD-dependency-build time
      (see `app.controllers.heroes.get_hero_crud` for the current

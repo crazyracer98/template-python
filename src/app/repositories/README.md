@@ -1,9 +1,9 @@
 # app/repositories/
 
-Storage-agnostic CRUD access that `app.crud`'s generic interface talks
+Storage-agnostic CRUD access that `app.interfaces`'s generic interface talks
 to, parameterized by a model type rather than one class per resource.
 
-- `base.py` — `Repository[ModelT]`, the `Protocol` `app.crud.base.
+- `base.py` — `Repository[ModelT]`, the `Protocol` `app.interfaces.base.
   CRUDInterface` is written against: `get`/`list`/`create`/`update`/
   `delete`/`count`/`update_many`/`delete_many`, all storage-agnostic.
   `list`/`update_many`/`delete_many` take `filters`/`sort` sequences from
@@ -24,7 +24,7 @@ to, parameterized by a model type rather than one class per resource.
   `where()`/`order_by()` terms via its private `_where_clauses`/
   `_order_by` helpers.
 - `memory.py` — `InMemoryRepository[ModelT]`, a dict-backed implementation
-  used when `MODE=mock` (see `app.resources.heroes.get_hero_crud`) so the
+  used when `MODE=mock` (see `app.crud_1.heroes.get_hero_crud`) so the
   app needs no database to boot. Matches `sqlalchemy.py`'s shape, but also
   sets `created_at`/`updated_at` itself since there's no server to supply
   them via `server_default`/`onupdate` — as naive UTC datetimes, matching
@@ -42,9 +42,9 @@ to, parameterized by a model type rather than one class per resource.
 
 ## Don't
 
-- Import from `app.crud`, `app.health`, or `app.controllers` — see
+- Import from `app.interfaces`, `app.health`, or `app.controllers` — see
   `../README.md`'s "Layering" section. `app.models` is fine
   (`SQLAlchemyRepository` is generic over `IdentifiedBase`).
 - Give `SQLAlchemyRepository` resource-specific logic — anything a
-  particular resource needs belongs in `app.crud` or the controller
+  particular resource needs belongs in `app.interfaces` or the controller
   calling it, not here.

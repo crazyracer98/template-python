@@ -103,13 +103,13 @@ type = "layers"
 containers = ["app"]
 layers = [
     "main",
-    "resources",
+    "crud_1",
     "controllers",
     "http_headers",
     "xml_codec",
     "web_components",
     "health",
-    "crud",
+    "interfaces",
     "repositories",
     "views",
     "models",
@@ -133,7 +133,7 @@ cache_dir = "/home/vscode/.cache/mypy"
 cache_dir = "/home/vscode/.cache/pytest"
 addopts = "--strict-markers --strict-config -ra --ignore=tests/e2e --cov=app --cov-report=term-missing"
 # Lets an `async def test_...` run without a per-test @pytest.mark.asyncio marker --
-# needed once tests exercise app.crud/app.repositories/app.health directly (not just
+# needed once tests exercise app.interfaces/app.repositories/app.health directly (not just
 # through TestClient, which stays sync regardless of this setting).
 asyncio_mode = "auto"
 # app.models.base's engine/session factory are process-wide singletons (like

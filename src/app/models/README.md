@@ -6,7 +6,7 @@ subpackage.
 
 - `base.py` — `Base` (the declarative base every model inherits from),
   `IdentifiedBase` (adds the single-column integer `id` primary key
-  `app.repositories`/`app.crud`'s generics are bound to), the async
+  `app.repositories`/`app.interfaces`'s generics are bound to), the async
   `engine`/`async_session_factory`, `get_db` (the FastAPI dependency
   that yields a request-scoped `AsyncSession`, committed on success), and
   `DBSession` (the `Annotated` alias that depends on it at
@@ -26,6 +26,6 @@ subpackage.
 
 ## Don't
 
-- Import from `app.views`, `app.repositories`, `app.crud`,
+- Import from `app.views`, `app.repositories`, `app.interfaces`,
   `app.health`, or `app.controllers` — see `../README.md`'s "Layering"
   section.

@@ -65,7 +65,7 @@ Practices below are distilled from Anthropic's own Claude Code guidance
 - **Address root causes.** Fix the underlying issue a failing check
   reports, not the check itself — don't silence a `ruff`/`mypy` error
   with a broad `# noqa`/`# type: ignore` just to make output green; see
-  the root `README.md`'s "Checks" section for the narrow, justified
+  `docs/TEMPLATE.md`'s "Checks" section for the narrow, justified
   exception.
 - **Scope investigations.** When exploring the codebase to answer a
   question, read only what's needed to answer it, and prefer a

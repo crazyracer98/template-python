@@ -17,10 +17,31 @@
   root `Dockerfile`, and creates a GitHub release with auto-generated
   notes and that image attached as an OCI tarball. Also pushes the image
   to an OCI registry if one is configured (see "OCI registry" below).
+- `template-sync.yml` — runs in an *instance* of this template, not
+  here (see the root `docs/TEMPLATE.md`'s "Template sync" section and
+  `../template-sync-manifest.yml`'s header for the full design). On a
+  schedule or `workflow_dispatch`, diffs the instance against the
+  template's latest tagged release per the manifest's tiers and opens a
+  PR — never a direct push, never auto-merged.
 
-Both workflows' `runs-on` defaults to `ubuntu-latest` but can be
+Every workflow's `runs-on` defaults to `ubuntu-latest` but can be
 overridden with the `CI_RUNNER` repository/organization variable —
 e.g. to point at self-hosted runners.
+
+## Template sync
+
+`template-sync.yml` reads its own operating parameters from repository
+variables/secrets, all optional:
+
+- `TEMPLATE_SYNC_INTERVAL` (variable, `weekly` | `monthly`, default
+  `weekly`) — the workflow still wakes up weekly regardless (cron can't
+  read a repository variable to pick its own schedule); on `monthly` it
+  no-ops except during the first cron-scheduled week of the month.
+- `TEMPLATE_SYNC_CHANNEL` (variable, `stable` | `alpha` | `beta` | `rc`,
+  default `stable`) — which tag channel to sync to.
+- `TEMPLATE_SYNC_TOKEN` (secret) — a PAT with read access to the
+  template repository, if it's private. Falls back to the default
+  `GITHUB_TOKEN` (works for a public template).
 
 ## OCI registry
 
@@ -39,8 +60,9 @@ workflow works with no registry configured at all. When it is set:
 
 ## Do
 
-- Give `release.yml` `contents: write` and nothing broader; leave
-  `checks.yml` at `contents: read`.
+- Give `release.yml` and `template-sync.yml` `contents: write` and
+  nothing broader (`template-sync.yml` also needs `pull-requests:
+  write`, for nothing else); leave `checks.yml` at `contents: read`.
 
 ## Don't
 

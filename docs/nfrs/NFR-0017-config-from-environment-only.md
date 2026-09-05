@@ -14,7 +14,7 @@ secrets shall never be hardcoded in source.
 ## Source
 
 Operators/SRE; security/compliance. Implemented in
-`src/app/config.py`; documented in the root `README.md`'s "Don't" and
+`src/app/config.py`; documented in `docs/TEMPLATE.md`'s "Don't" and
 `src/app/README.md`'s "Configuration"/"Don't".
 
 ## Verification

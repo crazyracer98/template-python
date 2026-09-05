@@ -12,8 +12,8 @@ default run (`tests/unit` + `tests/integration`) and
 
 ## Source
 
-Developers; QA/CI. Configured in `pyproject.toml`; documented in the
-root `README.md`'s "Checks" section.
+Developers; QA/CI. Configured in `pyproject.toml`; documented in
+`docs/TEMPLATE.md`'s "Checks" section.
 
 ## Verification
 

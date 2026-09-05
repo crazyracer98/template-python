@@ -338,7 +338,7 @@ future breaking resource change follows.
 
 ## Don't
 
-- Read from a `.env` file, or add one back — see the root `README.md`'s
+- Read from a `.env` file, or add one back — see `docs/TEMPLATE.md`'s
   "Don't" section.
 - Hardcode a real secret's value here — real secrets belong in
   `.secrets/`, referenced from a compose file.

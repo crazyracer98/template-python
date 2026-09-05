@@ -35,7 +35,7 @@ this directory).
   (failures, diffs, summaries) instead of full output. `snip` itself is
   installed by `scripts/develop.sh`, pinned to `SNIP_VERSION` in the
   Dockerfile, and checksum-verified against its published release
-  checksums — see "Versions and config" in the root `README.md`. Chosen
+  checksums — see "Versions and config" in `docs/TEMPLATE.md`. Chosen
   over the more popular
   [rtk](https://github.com/rtk-ai/rtk) because its filters are
   declarative YAML data (auditable, and cover `mypy` — rtk's don't) and

@@ -56,7 +56,7 @@ jobs:
       # registry is configured below -- a portable, offline-loadable
       # artifact (`docker load --input`) of exactly what was released.
       - name: Build runner image (OCI tarball)
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           target: runner
@@ -88,7 +88,7 @@ jobs:
 
       - name: Push runner image to OCI registry
         if: vars.OCI_REGISTRY != ''
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           target: runner

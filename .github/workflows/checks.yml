@@ -34,7 +34,7 @@ jobs:
       # no push/load since this step only needs to populate the cache, not
       # produce a usable image. See docs/plans/2026-09-speed-up-checks-devcontainer-build.md.
       - name: Warm devcontainer image build cache
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           target: develop

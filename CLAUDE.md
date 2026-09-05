@@ -74,6 +74,14 @@ Practices below are distilled from Anthropic's own Claude Code guidance
 - **Course-correct early.** If the same correction has to be made
   twice on one approach, stop and reconsider the approach itself
   rather than trying a third variation.
+- **Use the devcontainer's own services, don't spin up your own.**
+  Check `.devcontainer/compose.yml`'s `include:` and `.devcontainer/stack/`
+  for which backing services (databases, object storage, auth, browsers,
+  etc.) are already running before reaching for one yourself. Docker-in-
+  Docker being available is not a signal to `docker run` a fresh instance
+  of one of these for tests or debugging — connect to the existing
+  service instead. If a needed service or version genuinely isn't
+  provided, say so and ask, rather than standing up a parallel one.
 
 `.claude/hooks/self-check.sh` automates the fast tier of this (see
 `.claude/README.md`) but doesn't replace running `mypy`/`pytest`/the

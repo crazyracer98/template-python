@@ -135,6 +135,11 @@ def test_hero_filter_sort_and_bulk_actions(
             "Filter Test Beta",
         }
 
+        oversized_regex = page.request.get(
+            f"{base_url}/v2/heroes", params={"name__regex": "a" * 201}, headers=headers
+        )
+        assert oversized_regex.status == 422
+
         bulk_update = page.request.patch(
             f"{base_url}/v2/heroes",
             params={"name__icontains": "Filter Test"},

@@ -38,6 +38,9 @@ def test_add_security_headers_sets_headers_on_every_response() -> None:
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert "default-src 'self'" in response.headers["Content-Security-Policy"]
     assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+    assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Permissions-Policy"] == "geolocation=(), microphone=(), camera=()"
 
 
 def test_add_security_headers_covers_error_responses_too() -> None:

@@ -20,6 +20,10 @@ router = APIRouter(tags=["protected"])
     "/protected",
     dependencies=[Depends(sunset(datetime(2027, 1, 1, tzinfo=UTC), link="/v2/heroes"))],
 )
+# Gated by get_current_claims only (authenticated, no role check) -- fine for this
+# documented example, but do not copy this route into a real resource's router
+# without also adding a role requirement (dependencies=[Depends(require_roles(...))],
+# see app.oidc's "RBAC" section and heroes.py's ReadRoles/WriteRoles/DeleteRoles).
 async def protected(
     claims: Annotated[dict[str, Any], Depends(get_current_claims)],
 ) -> dict[str, str]:

@@ -14,10 +14,11 @@ tests/unit/controllers/test_mock.py exercising it directly in-process.
 from typing import Any
 
 import jwt
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.rate_limit import limiter
 
 router = APIRouter(tags=["mock"])
 settings = get_settings()
@@ -35,11 +36,18 @@ class MockTokenRequest(BaseModel):
 
 
 @router.post("/mock/token")
-async def issue_mock_token(request: MockTokenRequest) -> dict[str, Any]:
-    """Issue a mock access token carrying the given subject and client roles."""
+@limiter.limit(settings.rate_limit_mock_token)
+async def issue_mock_token(payload: MockTokenRequest, request: Request) -> dict[str, Any]:
+    """Issue a mock access token carrying the given subject and client roles.
+
+    `request: Request` is otherwise-unused here -- app.rate_limit's limiter.limit(...)
+    decorator requires a parameter literally named `request` (or `websocket`) typed
+    as a real Request to find the calling client's address, which is why the body
+    param above is named `payload` instead of the more usual `request`.
+    """
     claims = {
-        "sub": request.sub,
-        "preferred_username": request.sub,
-        "resource_access": {settings.oidc_client_id: {"roles": request.roles}},
+        "sub": payload.sub,
+        "preferred_username": payload.sub,
+        "resource_access": {settings.oidc_client_id: {"roles": payload.roles}},
     }
     return {"access_token": jwt.encode(claims, _MOCK_SIGNING_KEY, algorithm="HS256")}

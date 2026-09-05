@@ -8,15 +8,21 @@ given" -- each router factory wraps the same calls in its own response format
 and build_xml_router's own public signatures are unchanged by this split.
 """
 
+import logging
 from typing import Any
 
 from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 
+from app.config import get_settings
 from app.controllers.crud_query import parse_filters, parse_sort
 from app.crud.base import CRUDLike
+from app.repositories.filtering import FilterClause
 from app.views.bulk import BulkDeleteResult, BulkUpdateResult
+
+settings = get_settings()
+logger = logging.getLogger(__name__)
 
 _NO_TARGET_ERROR = [
     {
@@ -25,6 +31,38 @@ _NO_TARGET_ERROR = [
         "type": "value_error",
     }
 ]
+
+
+def _actor(request: Request) -> str:
+    """Return the authenticated caller's subject, for the audit log below.
+
+    Reads the claims app.oidc.require_roles stashes on request.state (a route with
+    no role requirement leaves this unset), rather than requiring every route to
+    redeclare that dependency as a captured parameter just to pass it through here.
+    """
+    claims: dict[str, Any] | None = getattr(request.state, "claims", None)
+    return "unknown" if not claims else str(claims.get("sub", "unknown"))
+
+
+async def _check_bulk_action_size(crud: CRUDLike[Any], filters: list[FilterClause]) -> None:
+    """Refuse a bulk update/delete whose filters match more than the configured cap.
+
+    A technically-non-empty but always-true filter (e.g. id__gte=0) would otherwise
+    still match every row -- counting first (cheap relative to the mutation itself)
+    catches that before any row is touched.
+
+    The raise below is `# pragma: no cover` for tests/e2e specifically: triggering it
+    live would mean creating over bulk_action_max_matched (1000 by default) records
+    against the shared e2e stack, too slow/heavy for what tests/unit/controllers/
+    test_crud_router.py already covers directly (with the cap monkeypatched low).
+    """
+    matched = await crud.count(filters=filters)
+    if matched > settings.bulk_action_max_matched:  # pragma: no cover -- see docstring
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Bulk action would affect {matched} records, over the "
+            f"{settings.bulk_action_max_matched}-record limit -- narrow the filters",
+        )
 
 
 async def resolve_list_or_get(
@@ -66,11 +104,17 @@ async def resolve_update(
     filters = parse_filters(schema, request.query_params)
     if not filters:
         raise RequestValidationError(_NO_TARGET_ERROR)
+    await _check_bulk_action_size(crud, filters)
     updated_records = await crud.update_many(filters=filters, data=data)
-    return BulkUpdateResult(
-        matched=len(updated_records),
-        ids=[record.id for record in updated_records],
+    ids = [record.id for record in updated_records]
+    logger.info(
+        "Bulk update: actor=%s path=%s filters=%r ids=%r",
+        _actor(request),
+        request.url.path,
+        filters,
+        ids,
     )
+    return BulkUpdateResult(matched=len(updated_records), ids=ids)
 
 
 async def resolve_delete(
@@ -89,8 +133,17 @@ async def resolve_delete(
     filters = parse_filters(schema, request.query_params)
     if not filters:
         raise RequestValidationError(_NO_TARGET_ERROR)
+    await _check_bulk_action_size(crud, filters)
     deleted_records = await crud.delete_many(filters=filters)
+    ids = [record.id for record in deleted_records]
+    logger.info(
+        "Bulk delete: actor=%s path=%s filters=%r ids=%r",
+        _actor(request),
+        request.url.path,
+        filters,
+        ids,
+    )
     return BulkDeleteResult(
         matched=len(deleted_records),
-        ids=[record.id for record in deleted_records],
+        ids=ids,
     )

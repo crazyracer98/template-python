@@ -63,10 +63,13 @@ defaults), then
 
 ## Checks
 
-`ruff` (lint + format), `mypy --strict`, and `pytest` are all configured
-to fail on any violation — see `pyproject.toml`. `pytest` also fails
-below 100% coverage of `src/app`, for both the default run
-(`tests/unit` + `tests/integration`) and `uv run pytest tests/e2e`. Run
+`ruff` (lint + format), `mypy --strict`, `pytest`, and `pip-audit`
+(dependency vulnerabilities, run against exactly what `uv.lock` resolves)
+are all configured to fail on any violation — see `pyproject.toml`.
+`pytest` also fails below 100% coverage of `src/app`, for both the
+default run (`tests/unit` + `tests/integration`) and `uv run pytest
+tests/e2e`. `.github/dependabot.yml` opens a weekly update PR for Python
+dependencies, GitHub Actions, and the Dockerfile's base images. Run
 everything at once with:
 
 ```bash

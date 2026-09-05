@@ -57,12 +57,11 @@ class CompatCRUD[LegacySchemaT: BaseModel, SchemaT: BaseModel, ModelT]:
         items = await self._crud.list(skip=skip, limit=limit, filters=filters, sort=sort)
         return [self._to_legacy(item) for item in items]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:  # pragma: no cover
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
         """Return how many records match the given filters.
 
-        Not called by any route yet -- reserved for a future total-count response
-        header -- so it never runs through the real HTTP stack tests/integration/
-        tests/e2e exercise. Covered directly by tests/unit/crud.
+        Called by app.controllers.crud_actions before a bulk update/delete, to cap
+        how many records a single action can affect.
         """
         return await self._crud.count(filters=filters)
 

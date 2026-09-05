@@ -94,6 +94,9 @@ class _SecurityHeadersMiddleware:
                 )
                 headers["X-Frame-Options"] = "DENY"
                 headers["X-Content-Type-Options"] = "nosniff"
+                headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+                headers["Referrer-Policy"] = "no-referrer"
+                headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
             await send(message)
 
         await self.app(scope, receive, _send)
@@ -109,6 +112,11 @@ def add_security_headers(app: FastAPI) -> None:
     Content-Security-Policy and X-Frame-Options harden the HTML pages
     app.web_components serves against injected/framed content, and
     X-Content-Type-Options stops a browser from ever re-sniffing a JSON/XML
-    response body as something else.
+    response body as something else. Strict-Transport-Security pins every
+    origin serving this app to HTTPS for future requests (a no-op over plain
+    HTTP, where browsers ignore it), Referrer-Policy stops the full request
+    URL leaking to a third party via the Referer header on an outbound link,
+    and Permissions-Policy denies powerful browser features this app's pages
+    never use.
     """
     app.add_middleware(_SecurityHeadersMiddleware)

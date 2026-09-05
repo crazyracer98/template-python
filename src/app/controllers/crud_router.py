@@ -18,19 +18,27 @@ given filters" logic each factory's routes wrap in their own response format.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Annotated, Any
 
 from defusedxml.common import DefusedXmlException
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, ValidationError
 
+from app.config import get_settings
 from app.controllers.crud_actions import resolve_delete, resolve_list_or_get, resolve_update
 from app.controllers.crud_query import FieldFilterInfo, describe_fields
+from app.rate_limit import exempt_single_record_action, limiter
 from app.views.bulk import BulkDeleteResult, BulkUpdateResult
 from app.web_components import render_crud_component_js, render_crud_form
 from app.xml_codec import from_xml, is_list_annotation, to_xml
+
+settings = get_settings()
+
+# Unbounded `?limit=` would let a caller pull an entire table in one response --
+# cap it the same way skip=0 already bounds the low end.
+_MAX_LIMIT = 1000
 
 
 def _with_dependency_headers[ResponseT: Response](
@@ -93,7 +101,7 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
         request: Request,
         id: int | None = None,  # noqa: A002
         skip: int = 0,
-        limit: int = 100,
+        limit: Annotated[int, Query(le=_MAX_LIMIT)] = 100,
     ) -> schema | list[schema]:  # type: ignore[valid-type]
         return await resolve_list_or_get(  # type: ignore[no-any-return]
             crud, schema, request, id=id, skip=skip, limit=limit, not_found=not_found
@@ -108,6 +116,7 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
         return describe_fields(schema)
 
     @router.patch("", dependencies=[write_roles])
+    @limiter.limit(settings.rate_limit_bulk_action, exempt_when=exempt_single_record_action)
     async def update_records(
         crud: crud_dependency,
         request: Request,
@@ -117,6 +126,7 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
         return await resolve_update(crud, schema, request, id=id, data=record, not_found=not_found)  # type: ignore[no-any-return]
 
     @router.delete("", dependencies=[delete_roles], response_model=None)
+    @limiter.limit(settings.rate_limit_bulk_action, exempt_when=exempt_single_record_action)
     async def delete_records(
         crud: crud_dependency,
         request: Request,
@@ -156,7 +166,7 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
         response: Response,
         id: int | None = None,  # noqa: A002
         skip: int = 0,
-        limit: int = 100,
+        limit: Annotated[int, Query(le=_MAX_LIMIT)] = 100,
     ) -> Response:
         result = await resolve_list_or_get(
             crud, schema, request, id=id, skip=skip, limit=limit, not_found=not_found
@@ -183,6 +193,7 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
         )
 
     @router.patch("", dependencies=[write_roles])
+    @limiter.limit(settings.rate_limit_bulk_action, exempt_when=exempt_single_record_action)
     async def update_records_xml(
         crud: crud_dependency,
         request: Request,
@@ -200,6 +211,7 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
         return _with_dependency_headers(response, Response(content=body, media_type=xml_media_type))
 
     @router.delete("", dependencies=[delete_roles])
+    @limiter.limit(settings.rate_limit_bulk_action, exempt_when=exempt_single_record_action)
     async def delete_records_xml(
         crud: crud_dependency,
         request: Request,

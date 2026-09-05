@@ -148,6 +148,20 @@ def test_parse_filters_string_ops() -> None:
     assert clauses == [FilterClause("label", FilterOp.ICONTAINS, "App")]
 
 
+def test_parse_filters_regex_within_length_limit_accepted() -> None:
+    """A `field__regex=` filter at or under the length cap parses normally."""
+    pattern = "a" * 200
+    clauses = parse_filters(_Widget, QueryParams(f"label__regex={pattern}"))
+    assert clauses == [FilterClause("label", FilterOp.REGEX, pattern)]
+
+
+def test_parse_filters_regex_over_length_limit_rejected() -> None:
+    """A `field__regex=` filter over the length cap is a 400, guarding against ReDoS."""
+    pattern = "a" * 201
+    with pytest.raises(RequestValidationError):
+        parse_filters(_Widget, QueryParams(f"label__regex={pattern}"))
+
+
 def test_parse_filters_boolean() -> None:
     """A boolean field's bare value parses true/false (case-insensitively)."""
     assert parse_filters(_Widget, QueryParams("active=True")) == [

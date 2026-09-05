@@ -97,13 +97,11 @@ class SQLAlchemyRepository[ModelT: IdentifiedBase]:
         result = await self._session.execute(statement)
         return result.scalars().all()
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:  # pragma: no cover
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
         """Return how many records match the given filters.
 
-        Not called by any route yet -- reserved for a future total-count response
-        header -- so it never runs through the real HTTP stack tests/integration/
-        tests/e2e exercise. Covered directly by tests/unit/crud, tests/unit/
-        repositories, and tests/integration/repositories.
+        Called by app.controllers.crud_actions before a bulk update/delete, to cap
+        how many records a single action can affect.
         """
         statement = (
             select(func.count()).select_from(self._model).where(*self._where_clauses(filters))

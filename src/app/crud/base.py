@@ -92,12 +92,11 @@ class CRUDInterface[SchemaT: BaseModel, ModelT]:
         instances = await self._repository.list(skip=skip, limit=limit, filters=filters, sort=sort)
         return [self._schema.model_validate(instance) for instance in instances]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:  # pragma: no cover
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
         """Return how many records match the given filters.
 
-        Not called by any route yet -- reserved for a future total-count response
-        header -- so it never runs through the real HTTP stack tests/integration/
-        tests/e2e exercise. Covered directly by tests/unit/crud.
+        Called by app.controllers.crud_actions before a bulk update/delete, to cap
+        how many records a single action can affect.
         """
         return await self._repository.count(filters=filters)
 

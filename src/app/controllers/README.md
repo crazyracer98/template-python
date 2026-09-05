@@ -52,7 +52,14 @@ are given — a request with **no** filters and no `id` is rejected (422 via
 `app.controllers.crud_actions`'s `resolve_list_or_get`/`resolve_update`/
 `resolve_delete` implement this id/filter/bulk decision once, shared by both
 factories; each wraps the same calls in its own response format (JSON body
-vs. an XML-rendered `Response`). A bulk action's response
+vs. an XML-rendered `Response`). Before a bulk update/delete actually runs,
+`crud_actions.py` counts how many records the filters match
+(`CRUDLike.count`) and refuses the action (400) above
+`app.config.Settings.bulk_action_max_matched` (default 1000) — a
+technically-non-empty but always-true filter (e.g. `id__gte=0`) would
+otherwise still match every row. A bulk action that does run is logged
+(`INFO`, actor/path/filters/ids) for auditing, and is itself rate-limited —
+see `app/README.md`'s "Rate limiting". A bulk action's response
 (`app.views.bulk.BulkUpdateResult`/`BulkDeleteResult`) carries the matched
 count and the ids affected, not the full records. `build_json_router` also
 serves `GET <prefix>/filters`, the same per-field-type introspection

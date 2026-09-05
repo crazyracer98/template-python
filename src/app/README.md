@@ -11,10 +11,10 @@ split across subpackages, each with its own `README.md`:
 - `health/` — the health check interface and registry.
 
 `config.py`/`main.py`/`oidc.py`/`telemetry.py`/`problem_details.py`/
-`http_headers.py`/`xml_codec.py`/`web_components.py` stay flat, outside
-any subpackage — a flat module has no resource-specific code and no
-state of its own beyond what it's explicitly passed or reads from
-`app.config`.
+`rate_limit.py`/`http_headers.py`/`xml_codec.py`/`web_components.py` stay
+flat, outside any subpackage — a flat module has no resource-specific
+code and no state of its own beyond what it's explicitly passed or reads
+from `app.config`.
 
 - `config.py` — settings, read from environment variables; see
   "Configuration" and "MODE" below.
@@ -26,6 +26,9 @@ state of its own beyond what it's explicitly passed or reads from
 - `telemetry.py` — structured JSON logging setup; see "Structured
   logging / OTEL" below.
 - `problem_details.py` — RFC 9457 error responses; see below.
+- `rate_limit.py` — the Redis-backed `slowapi` limiter applied to
+  `POST /mock/token` and each resource's bulk update/delete routes; see
+  "Rate limiting" below.
 - `http_headers.py` — the `Sunset`/`Deprecation` header dependency and
   the baseline security-headers middleware; see "Sunset/Deprecation
   headers" below.
@@ -36,20 +39,20 @@ state of its own beyond what it's explicitly passed or reads from
 ## Layering
 
 Import order between all of the above is strict and one-directional —
-lower layers never import from higher ones (`config` → `telemetry` →
-`problem_details` → `oidc` → `models` → `views` → `repositories` →
-`crud` → `health` → `web_components` → `xml_codec` → `http_headers` →
-`controllers` → `main`) — enforced by `import-linter`'s `layers`
-contract in `../../pyproject.toml`'s `[tool.importlinter]`, run via `uv
-run lint-imports` (wired into `../../.pre-commit-config.yaml`'s
+lower layers never import from higher ones (`config` → `rate_limit` →
+`telemetry` → `problem_details` → `oidc` → `models` → `views` →
+`repositories` → `crud` → `health` → `web_components` → `xml_codec` →
+`http_headers` → `controllers` → `main`) — enforced by `import-linter`'s
+`layers` contract in `../../pyproject.toml`'s `[tool.importlinter]`, run
+via `uv run lint-imports` (wired into `../../.pre-commit-config.yaml`'s
 manual/pre-push stage, same as mypy). A new subpackage or flat module
 gets added to that `layers` list at the point matching its real
 dependencies, not appended blindly to one end.
 
 ```mermaid
 graph LR
-    config --> telemetry --> problem_details --> oidc --> models
-    models --> views --> repositories --> crud --> health
+    config --> rate_limit --> telemetry --> problem_details --> oidc
+    oidc --> models --> views --> repositories --> crud --> health
     health --> web_components --> xml_codec --> http_headers
     http_headers --> controllers --> main
 ```
@@ -114,6 +117,17 @@ a token issued for any other client of the same provider. `dev`/`mock`
 stay opt-in (`../../.devcontainer/stack/keycloak/keycloak.env` sets it
 anyway, via the `api` client's `api-audience` protocol mapper in
 `realm-export.json`, so every mode's tokens actually carry it).
+`config.py`'s validation similarly refuses `MODE=production` with
+`oidc_issuer_url` left at `http://` (the JWKS/discovery fetch, and the
+Authorization Code token exchange, would otherwise happen in cleartext),
+or with `postgres_password`/`s3_access_key`/`s3_secret_key` left at their
+local/devcontainer default values.
+
+`oidc.py` logs a `WARNING` (with the request path) on every rejected
+bearer token, and `require_roles` logs one (path + subject + the roles
+that were required) on every `403` — both to make brute-force/enumeration
+attempts against protected routes detectable (see `telemetry.py`'s
+"Structured logging / OTEL" below for where that log line ends up).
 
 ### RBAC
 
@@ -137,9 +151,11 @@ role list beyond what `realm-export.json` defines.
 pattern as `get_settings()` generally) — it's a startup-time setting,
 not a per-request one.
 
-- `dev` (the default): `main.py` starts `debugpy` listening on `:5678`
-  for a remote attach (non-blocking — never `wait_for_client()`) and sets
-  FastAPI's `debug=True`. `../../.devcontainer/compose.yml` sets
+- `dev` (the default): `main.py` starts `debugpy` listening on
+  `127.0.0.1:5678` for a remote attach (non-blocking — never
+  `wait_for_client()` — and loopback-only, since the devcontainer's own
+  port forwarding reaches it there without needing every interface) and
+  sets FastAPI's `debug=True`. `../../.devcontainer/compose.yml` sets
   `MODE: dev`.
 - `mock`: every external service is replaced with a local fake, so the
   app needs zero containers to boot — `repositories.memory.
@@ -183,6 +199,13 @@ directly by `OTLPLogExporter()` itself, never re-modeled as `Settings`
 fields — OTEL's env-var convention is already the single source of
 truth for those.
 
+Every non-reserved `LogRecord` attribute (i.e. anything passed via a call's
+own `extra={...}`) is redacted to `"[REDACTED]"` before being serialized if
+its key looks credential-shaped (`token`, `password`, `secret`,
+`authorization`, `claims`, `credential`, matched as a case-insensitive
+substring) — a denylist, not an allowlist, so a future `logger.info(...,
+extra={"access_token": ...})` can't leak it into stdout/OTLP verbatim.
+
 ## RFC 9457 error responses
 
 `problem_details.py`'s `register_problem_handlers(app)` (called once
@@ -192,7 +215,10 @@ HTTP_404_NOT_FOUND, ...)`, unchanged), FastAPI's request validation
 errors, and any other unhandled exception into a single consistent
 `application/problem+json` body — no route needs to build this itself.
 A route that wants a specific `detail` message just raises
-`HTTPException` normally.
+`HTTPException` normally. Every otherwise-unhandled exception is also
+logged (`logger.exception`, with the request path) before being turned
+into the generic 500 body, so a genuine bug or attack attempt leaves a
+server-side trace instead of vanishing into a bare response.
 
 ## Sunset/Deprecation headers
 
@@ -206,10 +232,35 @@ own timestamps.
 `http_headers.py`'s `add_security_headers(app)` is unconditional
 middleware (`main.py` calls it once, right after
 `register_problem_handlers`) that sets `Content-Security-Policy`,
-`X-Frame-Options: DENY`, and `X-Content-Type-Options: nosniff` on every
-response, including ones a route's own dependencies never run for (a
-404, an RFC 9457 error body) — unlike `sunset()` above, no route opts
-into this individually.
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Strict-Transport-Security`, `Referrer-Policy`, and `Permissions-Policy`
+on every response, including ones a route's own dependencies never run
+for (a 404, an RFC 9457 error body) — unlike `sunset()` above, no route
+opts into this individually. `/docs`/`/redoc` get a separately relaxed
+`Content-Security-Policy` (Swagger UI/Redoc's own CDN script/style
+tags), applied by the same middleware based on request path.
+
+## Rate limiting
+
+`rate_limit.py`'s `limiter` (a `slowapi.Limiter`, backed by this app's
+Redis service — `Settings.redis_url`, shared across worker processes)
+is applied per-route via `@limiter.limit(...)`, not as global
+middleware: `app.controllers.mock`'s `POST /mock/token`
+(`Settings.rate_limit_mock_token`, default `10/minute`) and every
+resource's generated bulk update/delete routes
+(`Settings.rate_limit_bulk_action`, default `20/minute`, exempted for a
+single-record `?id=` request via `exempt_single_record_action`) — see
+`rate_limit.py`'s own module docstring for why this stays per-route
+instead of `slowapi.middleware.SlowAPIMiddleware` (a
+`BaseHTTPMiddleware`, which `_SecurityHeadersMiddleware`'s own docstring
+above documents as unsafe for this app). `slowapi.errors.
+RateLimitExceeded` is itself an `HTTPException` subclass (`429`), so
+`problem_details.py`'s existing handler renders it as a normal RFC 9457
+body with no separate wiring. `tests/e2e/conftest.py` raises both limits
+generously for its own live process, since one e2e run's cumulative
+login/bulk-action traffic would otherwise trip the production defaults
+itself — `tests/unit/test_rate_limit.py` verifies the actual enforcement
+against a throwaway `Limiter` instead.
 
 ## Example CRUD resource: Hero
 

@@ -14,7 +14,13 @@ from app.models.base import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: fileConfig's default (True) disables every
+    # already-instantiated logger not declared in alembic.ini's own [loggers] section
+    # -- since app.main's lifespan runs migrations before serving any request, that
+    # would permanently silence every app.* logger (app.oidc, app.problem_details,
+    # app.controllers.crud_actions, ...) for the rest of the process on every real
+    # startup, not just in a test.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

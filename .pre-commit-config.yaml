@@ -111,3 +111,13 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push, manual]
+
+      - id: pip-audit
+        name: pip-audit (dependency vulnerabilities)
+        # --local: audit exactly what uv.lock resolves into this environment, not
+        # every version pip-audit could find on PyPI for a looser requirement.
+        entry: uv run pip-audit --local
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push, manual]

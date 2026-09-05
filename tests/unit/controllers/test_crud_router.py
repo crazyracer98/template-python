@@ -5,14 +5,17 @@ pair, not tied to Hero -- mirrors how tests/unit/crud/test_compat.py tests
 CompatCRUD generically.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any
 
+import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 
+from app.controllers import crud_actions
 from app.controllers.crud_router import build_json_router, build_web_router, build_xml_router
 from app.crud.base import CRUDInterface
 from app.repositories.filtering import FilterClause, FilterOp, SortClause
@@ -282,6 +285,18 @@ def test_json_router_list_applies_filters_and_sort() -> None:
         del app.dependency_overrides[get_gadget_crud]
 
 
+def test_json_router_list_rejects_limit_over_the_cap() -> None:
+    """GET /gadgets?limit=1001 is a 422, capping how many records one request can pull."""
+    response = client.get("/gadgets", params={"limit": 1001})
+    assert response.status_code == 422
+
+
+def test_json_router_list_allows_limit_at_the_cap() -> None:
+    """GET /gadgets?limit=1000 (the cap itself) is accepted."""
+    response = client.get("/gadgets", params={"limit": 1000})
+    assert response.status_code == 200
+
+
 def test_json_router_bulk_update_via_filters() -> None:
     """PATCH /gadgets?<filters> with no id updates every matching record."""
     repository = _FakeGadgetRepository()
@@ -326,6 +341,80 @@ def test_json_router_bulk_delete_via_filters() -> None:
 
         remaining = client.get("/gadgets").json()
         assert [g["name"] for g in remaining] == ["banana"]
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_update_rejected_over_row_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bulk PATCH matching more records than bulk_action_max_matched is refused, untouched."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    monkeypatch.setattr(crud_actions.settings, "bulk_action_max_matched", 1)
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        client.post("/gadgets", json={"name": "apricot", "tags": []})
+
+        response = client.patch(
+            "/gadgets", params={"name__icontains": "ap"}, json={"tags": ["updated"]}
+        )
+        assert response.status_code == 400
+
+        remaining = client.get("/gadgets").json()
+        assert all(g["tags"] == [] for g in remaining)
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_delete_rejected_over_row_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bulk DELETE matching more records than bulk_action_max_matched is refused, untouched."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    monkeypatch.setattr(crud_actions.settings, "bulk_action_max_matched", 1)
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        client.post("/gadgets", json={"name": "apricot", "tags": []})
+
+        response = client.delete("/gadgets", params={"name__icontains": "ap"})
+        assert response.status_code == 400
+        assert len(client.get("/gadgets").json()) == 2
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_update_logs_an_audit_entry(caplog: pytest.LogCaptureFixture) -> None:
+    """A successful bulk update logs an audit entry naming the filters and affected ids."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        with caplog.at_level(logging.INFO, logger="app.controllers.crud_actions"):
+            response = client.patch(
+                "/gadgets", params={"name__icontains": "ap"}, json={"tags": ["updated"]}
+            )
+        assert response.status_code == 200
+        assert "Bulk update: actor=unknown path=/gadgets" in caplog.text
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_delete_logs_an_audit_entry(caplog: pytest.LogCaptureFixture) -> None:
+    """A successful bulk delete logs an audit entry naming the filters and affected ids."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        with caplog.at_level(logging.INFO, logger="app.controllers.crud_actions"):
+            response = client.delete("/gadgets", params={"name__icontains": "ap"})
+        assert response.status_code == 200
+        assert "Bulk delete: actor=unknown path=/gadgets" in caplog.text
     finally:
         del app.dependency_overrides[get_gadget_crud]
 

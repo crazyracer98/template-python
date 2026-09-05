@@ -3,6 +3,8 @@
 - `workflows/` — GitHub Actions; see its own `README.md`.
 - `scripts/` — helper scripts used by the workflows; see its own
   `README.md`.
+- `dependabot.yml` — weekly update PRs for Python deps (`uv`), GitHub
+  Actions, and the Dockerfile's base images.
 
 ## Do
 

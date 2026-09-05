@@ -13,19 +13,21 @@ see app.controllers.heroes/audit for routes that use it, and
 app.controllers.mock for how MODE=mock issues tokens carrying that same shape).
 """
 
+import logging
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
 from typing import Annotated, Any
 
 import httpx
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from jwt import PyJWKClient
 
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
     authorizationUrl=settings.oidc_authorization_url,
@@ -73,9 +75,21 @@ def decode_bearer_token(token: str) -> dict[str, Any]:
         ) from exc
 
 
-async def get_current_claims(token: Annotated[str, Depends(oauth2_scheme)]) -> dict[str, Any]:
-    """FastAPI dependency: validate the request's bearer token and return its claims."""
-    return decode_bearer_token(token)
+async def get_current_claims(
+    request: Request, token: Annotated[str, Depends(oauth2_scheme)]
+) -> dict[str, Any]:
+    """FastAPI dependency: validate the request's bearer token and return its claims.
+
+    Logs a WARNING (path only -- there's no verified subject to include, since the
+    token itself failed to validate) on every rejection, so brute-force/enumeration
+    attempts against protected routes are detectable (see app.problem_details for the
+    matching unhandled-exception log).
+    """
+    try:
+        return decode_bearer_token(token)
+    except HTTPException:
+        logger.warning("Rejected bearer token for %s", request.url.path)
+        raise
 
 
 def require_roles(*roles: str) -> Callable[..., Awaitable[dict[str, Any]]]:
@@ -87,13 +101,24 @@ def require_roles(*roles: str) -> Callable[..., Awaitable[dict[str, Any]]]:
     """
 
     async def _dependency(
+        request: Request,
         claims: Annotated[dict[str, Any], Depends(get_current_claims)],
     ) -> dict[str, Any]:
         granted = set(
             claims.get("resource_access", {}).get(settings.oidc_client_id, {}).get("roles", [])
         )
         if not granted.intersection(roles):
+            logger.warning(
+                "Denied role check for %s: subject=%r has none of %r",
+                request.url.path,
+                claims.get("sub", "unknown"),
+                roles,
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
+        # Stashed on request.state so app.controllers.crud_actions's audit log can
+        # name the caller without every route needing to redeclare this dependency
+        # as a captured parameter just to get its return value.
+        request.state.claims = claims
         return claims
 
     return _dependency

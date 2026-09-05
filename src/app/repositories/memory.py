@@ -92,13 +92,11 @@ class InMemoryRepository[ModelT: IdentifiedBase]:
         ordered = self._sorted(matching, sort) if sort else matching
         return ordered[skip : skip + limit]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:  # pragma: no cover
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
         """Return how many records match the given filters.
 
-        Not called by any route yet -- reserved for a future total-count response
-        header -- so it never runs through the real HTTP stack tests/integration/
-        tests/e2e exercise. Covered directly by tests/unit/crud and tests/unit/
-        repositories.
+        Called by app.controllers.crud_actions before a bulk update/delete, to cap
+        how many records a single action can affect.
         """
         return len(self._matching(filters))
 

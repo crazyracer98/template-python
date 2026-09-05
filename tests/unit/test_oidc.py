@@ -1,5 +1,6 @@
 """Unit test: decode_bearer_token rejects a malformed token, and require_roles gating."""
 
+import logging
 from typing import Annotated, Any
 
 import jwt
@@ -8,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app import oidc
-from app.oidc import decode_bearer_token, require_roles
+from app.oidc import decode_bearer_token, get_current_claims, require_roles
 
 
 def test_decode_bearer_token_rejects_a_malformed_token() -> None:
@@ -25,6 +26,20 @@ def test_decode_bearer_token_mock_mode_skips_verification(monkeypatch: pytest.Mo
         {"sub": "test-user"}, "at-least-32-bytes-long-hmac-signing-key", algorithm="HS256"
     )
     assert decode_bearer_token(token)["sub"] == "test-user"
+
+
+def test_get_current_claims_logs_a_warning_on_rejection(caplog: pytest.LogCaptureFixture) -> None:
+    """A rejected bearer token is logged with the request path, for brute-force detection."""
+    app = FastAPI()
+
+    @app.get("/whoami")
+    def whoami(claims: Annotated[dict[str, Any], Depends(get_current_claims)]) -> dict[str, Any]:
+        return claims
+
+    with caplog.at_level(logging.WARNING, logger="app.oidc"):
+        response = TestClient(app).get("/whoami", headers={"Authorization": "Bearer not-a-jwt"})
+    assert response.status_code == 401
+    assert "Rejected bearer token for /whoami" in caplog.text
 
 
 def _require_roles_app() -> FastAPI:
@@ -60,6 +75,20 @@ def test_require_roles_rejects_a_missing_role() -> None:
     }
     response = TestClient(app).get("/gated")
     assert response.status_code == 403
+
+
+def test_require_roles_logs_a_warning_on_denial(caplog: pytest.LogCaptureFixture) -> None:
+    """A 403 role denial is logged with the request path and subject, for auditing."""
+    app = _require_roles_app()
+    app.dependency_overrides[oidc.get_current_claims] = lambda: {
+        "sub": "u",
+        "resource_access": {oidc.settings.oidc_client_id: {"roles": ["viewer"]}},
+    }
+    with caplog.at_level(logging.WARNING, logger="app.oidc"):
+        response = TestClient(app).get("/gated")
+    assert response.status_code == 403
+    assert "Denied role check for /gated" in caplog.text
+    assert "'u'" in caplog.text
 
 
 def test_require_roles_rejects_claims_with_no_resource_access() -> None:

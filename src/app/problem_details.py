@@ -7,6 +7,7 @@ consistent `application/problem+json` body, instead of FastAPI's default
 `{"detail": ...}` shape.
 """
 
+import logging
 from collections.abc import Sequence
 from http import HTTPStatus
 
@@ -18,6 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class ProblemDetailResponse(JSONResponse):
@@ -80,6 +82,7 @@ async def _handle_unhandled_exception(  # pragma: no cover
     exercises it directly (against a throwaway route built to raise) and still
     counts toward its own 95% gate.
     """
+    logger.exception("Unhandled exception for %s", request.url.path, exc_info=exc)
     detail = str(exc) if settings.mode == "dev" else "Internal Server Error"
     return _problem(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

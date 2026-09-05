@@ -86,7 +86,18 @@ def _running_app(app_mode: str, base_url: str) -> Generator[None]:
     uvicorn = shutil.which("uvicorn")
     if uvicorn is None:
         raise RuntimeError("uvicorn not found on PATH")
-    mode_env = {"MODE": app_mode, **({"ALLOW_MOCK_MODE": "1"} if app_mode == "mock" else {})}
+    mode_env = {
+        "MODE": app_mode,
+        **({"ALLOW_MOCK_MODE": "1"} if app_mode == "mock" else {}),
+        # Generous, not the small production defaults: every e2e test file's own
+        # login/bulk-action calls share one real Redis-backed counter (keyed by
+        # client address, not per test), and this suite's own traffic volume would
+        # otherwise trip app.rate_limit's rate_limit_mock_token/rate_limit_bulk_action
+        # defaults well before any test intends to exercise rate limiting itself --
+        # that's covered directly instead, in tests/unit/test_rate_limit.py.
+        "RATE_LIMIT_MOCK_TOKEN": "1000/minute",
+        "RATE_LIMIT_BULK_ACTION": "1000/minute",
+    }
     # 0.0.0.0: must be reachable from the sibling selenium container, not
     # just loopback -- same as the root README's manual startup command.
     # Fixed args plus our own parsed base_url's port, not external input.

@@ -28,7 +28,14 @@ class Settings(BaseSettings):
     # from those raw pieces since Compose can't interpolate a value from
     # one env file into another compose file's own env var. See
     # README.md's "Configuration" section.
-    model_config = SettingsConfigDict(extra="ignore")
+    # extra="forbid" (not "ignore"): pydantic-settings' environment source only ever
+    # reads env vars matching a field's own name/validation_alias (verified in
+    # tests/unit/test_config.py::test_unrelated_env_vars_are_not_rejected), so this
+    # doesn't catch a typo'd env var like OIDC_AUDIANCE -- that's silently absent from
+    # the environment source's output either way, "forbid" or "ignore". It does still
+    # guard the constructor-kwargs path (Settings(**mapping) with an unrecognized key,
+    # e.g. from a future config-file source) rather than silently accepting it.
+    model_config = SettingsConfigDict(extra="forbid")
 
     app_name: str = "template-fastapi"
 
@@ -49,6 +56,20 @@ class Settings(BaseSettings):
     # own default/typo alone; only .devcontainer/compose.yml and CI set it,
     # both already scoped to local/CI use.
     allow_mock_mode: bool = False
+
+    # A bulk PATCH/DELETE with a technically-non-empty but always-true filter (e.g.
+    # id__gte=0) would otherwise still match every row -- see
+    # app.controllers.crud_actions, which counts matches before applying either
+    # action and refuses to proceed above this threshold.
+    bulk_action_max_matched: int = 1000
+
+    # app.rate_limit: slowapi limit-expression syntax ("<count>/<period>"). Applied to
+    # POST /mock/token and each resource's bulk update/delete routes -- the
+    # unauthenticated-or-destructive surface prioritized by the OWASP hardening pass
+    # this was added in, not every route (see app.rate_limit's module docstring for
+    # why this stays per-route instead of a blanket middleware).
+    rate_limit_mock_token: str = "10/minute"  # noqa: S105 -- a rate-limit expression, not a secret
+    rate_limit_bulk_action: str = "20/minute"
 
     postgres_user: str = "app"
     postgres_password: str = "app"  # noqa: S105 -- local Postgres default, not a real secret
@@ -113,6 +134,46 @@ class Settings(BaseSettings):
         """
         if self.mode == "mock" and not self.allow_mock_mode:  # pragma: no cover
             raise ValueError("MODE=mock requires ALLOW_MOCK_MODE=1 to be set")
+        return self
+
+    @model_validator(mode="after")
+    def _require_non_default_credentials_in_production(self) -> Self:
+        """Refuse to construct production Settings with a credential left at its local default.
+
+        postgres_password/s3_access_key/s3_secret_key all default to well-known,
+        publicly documented values (see this class's own field defaults above) meant
+        for the local/devcontainer stack only -- a production deployment that
+        inherits one of them unchanged would be trivially guessable.
+        """
+        if self.mode == "production":  # pragma: no cover
+            defaults = {
+                "postgres_password": "app",
+                "s3_access_key": "rustfsadmin",
+                "s3_secret_key": "rustfsadmin",
+            }
+            left_at_default = [
+                field for field, default in defaults.items() if getattr(self, field) == default
+            ]
+            if left_at_default:
+                raise ValueError(
+                    f"{', '.join(left_at_default)} must not be left at their default "
+                    "value when MODE=production"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _require_https_oidc_issuer_in_production(self) -> Self:
+        """Refuse to construct production Settings with a non-https oidc_issuer_url.
+
+        decode_bearer_token fetches the issuer's OIDC discovery document and JWKS
+        over whatever scheme oidc_issuer_url uses -- http:// in production would send
+        that (and, for the Authorization Code flow itself, the token exchange) in
+        cleartext.
+        """
+        if self.mode == "production" and not self.oidc_issuer_url.startswith(  # pragma: no cover
+            "https://"
+        ):
+            raise ValueError("oidc_issuer_url must use https:// when MODE=production")
         return self
 
 

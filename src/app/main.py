@@ -67,7 +67,12 @@ def _enable_debugger() -> None:
     so it's swallowed here.
     """
     with suppress(RuntimeError):
-        debugpy.listen(("0.0.0.0", 5678))  # noqa: S104 -- devcontainer-only, not internet-facing
+        # 127.0.0.1, not 0.0.0.0: VS Code's remote-attach reaches this through the
+        # devcontainer's own port forwarding (see .devcontainer/compose.yml), which
+        # connects to the container's loopback interface -- binding every interface
+        # would also accept a debugger connection from elsewhere on the container's
+        # network, with no ALLOW_MOCK_MODE-style second gate the way MODE=mock has.
+        debugpy.listen(("127.0.0.1", 5678))
 
 
 def _configure_debugger(mode: str) -> None:

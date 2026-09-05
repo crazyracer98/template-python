@@ -40,6 +40,13 @@ from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
 _RESERVED_PARAMS = frozenset({"skip", "limit", "sort"})
 
+# A `field__regex=` filter reaches Postgres's `~` operator (SQLAlchemyRepository) or
+# Python's re.search (InMemoryRepository) verbatim -- an unbounded pattern is a ReDoS
+# vector via catastrophic backtracking (e.g. "(a+)+$" against a crafted string).
+# Capping length here bounds the worst case for both backends without needing a
+# linear-time regex engine.
+_MAX_REGEX_PATTERN_LENGTH = 200
+
 
 class FieldKind:
     """String constants for the "kind" of a filterable field, as exposed over the wire."""
@@ -238,6 +245,11 @@ def parse_filters(schema: type[BaseModel], params: QueryParams) -> list[FilterCl
             )
             continue
         op = _SUFFIX_TO_OP[suffix]
+        if op is FilterOp.REGEX and len(raw) > _MAX_REGEX_PATTERN_LENGTH:
+            errors.append(
+                {"loc": ("query", key), "msg": "regex pattern too long", "type": "value_error"}
+            )
+            continue
         try:
             value = (
                 [_cast(spec, v) for v in raw.split(",")] if op is FilterOp.IN else _cast(spec, raw)

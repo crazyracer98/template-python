@@ -25,7 +25,7 @@ def test_configure_debugger_enables_debugpy_for_dev(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(debugpy, "listen", _fake_listen)
     main_module._configure_debugger("dev")  # must not raise despite the RuntimeError
-    assert calls == [("0.0.0.0", 5678)]  # noqa: S104 -- asserting the call args, not a real bind
+    assert calls == [("127.0.0.1", 5678)]
 
 
 def test_mount_mode_specific_routers_skips_non_mock_modes() -> None:

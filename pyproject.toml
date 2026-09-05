@@ -22,6 +22,7 @@ dependencies = [
     "python-multipart==0.0.32",
     "opentelemetry-instrumentation-logging==0.65b0",
     "defusedxml==0.7.1",
+    "slowapi==0.1.10",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +40,7 @@ dev = [
     "import-linter==2.14",
     "boto3-stubs[s3]==1.43.88",
     "types-defusedxml==0.7.0.20260504",
+    "pip-audit==2.10.1",
 ]
 
 [build-system]
@@ -113,6 +115,7 @@ layers = [
     "oidc",
     "problem_details",
     "telemetry",
+    "rate_limit",
     "config",
 ]
 
@@ -144,6 +147,10 @@ filterwarnings = [
     # alias that anyio 4.15.0 deprecated in favor of anyio.from_thread.BlockingPortal --
     # a starlette bug, not ours to fix here.
     "ignore:The anyio\\.abc\\.BlockingPortal alias is deprecated.*:DeprecationWarning:starlette\\.testclient",
+    # slowapi 0.1.10 (latest as of this writing) still calls the stdlib's own
+    # deprecated asyncio.iscoroutinefunction instead of inspect.iscoroutinefunction --
+    # a slowapi bug, not ours to fix here.
+    "ignore:'asyncio\\.iscoroutinefunction' is deprecated.*:DeprecationWarning:slowapi\\.extension",
 ]
 
 [tool.coverage.run]

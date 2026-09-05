@@ -1,5 +1,7 @@
 """Unit test: register_problem_handlers turns errors into application/problem+json."""
 
+import logging
+
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -51,11 +53,16 @@ def test_validation_error_becomes_problem_detail(problem_app: FastAPI) -> None:
     assert isinstance(body["detail"], list)
 
 
-def test_unhandled_exception_becomes_generic_problem_detail(problem_app: FastAPI) -> None:
-    """An unhandled exception renders as a generic 500 problem-details body."""
-    response = TestClient(problem_app, raise_server_exceptions=False).get("/boom-unhandled")
+def test_unhandled_exception_becomes_generic_problem_detail(
+    problem_app: FastAPI, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An unhandled exception renders as a generic 500 problem-details body, and is logged."""
+    with caplog.at_level(logging.ERROR, logger="app.problem_details"):
+        response = TestClient(problem_app, raise_server_exceptions=False).get("/boom-unhandled")
     assert response.status_code == 500
     assert response.headers["content-type"] == "application/problem+json"
     body = response.json()
     assert body["status"] == 500
+    assert "Unhandled exception for /boom-unhandled" in caplog.text
+    assert "ValueError: something broke" in caplog.text
     assert body["title"] == "Internal Server Error"

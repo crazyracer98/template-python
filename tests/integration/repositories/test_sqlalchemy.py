@@ -112,3 +112,12 @@ async def test_every_filter_op_against_real_postgres() -> None:
                 filters=[FilterClause("name", FilterOp.REGEX, "^FilterOp Low$")]
             )
         ] == [low.id]
+        assert [
+            h.id
+            for h in await repository.list(
+                filters=[
+                    FilterClause("name", FilterOp.REGEX, "^FilterOp"),
+                    FilterClause("id", FilterOp.IN, ids),
+                ]
+            )
+        ] == ids

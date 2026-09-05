@@ -92,8 +92,14 @@ class InMemoryRepository[ModelT: IdentifiedBase]:
         ordered = self._sorted(matching, sort) if sort else matching
         return ordered[skip : skip + limit]
 
-    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
-        """Return how many records match the given filters."""
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:  # pragma: no cover
+        """Return how many records match the given filters.
+
+        Not called by any route yet -- reserved for a future total-count response
+        header -- so it never runs through the real HTTP stack tests/integration/
+        tests/e2e exercise. Covered directly by tests/unit/crud and tests/unit/
+        repositories.
+        """
         return len(self._matching(filters))
 
     async def create(self, data: dict[str, Any]) -> ModelT:

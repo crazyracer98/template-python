@@ -12,6 +12,12 @@ real HTTP stack tests/integration/tests/e2e exercise. tests/integration/
 repositories/test_sqlalchemy.py's test_every_filter_op_against_real_postgres
 calls this repository directly to exercise every FilterOp regardless; the pragma
 only affects what's counted toward the e2e coverage gate specifically.
+
+The trailing `case _` in `_where_clauses`'s match is `# pragma: no cover` for a
+different reason: FilterOp is exhaustive over the cases above it, so the branch
+is unreachable by construction -- it exists only so coverage.py doesn't count the
+implicit "no case matched" fall-through of the match statement's last real case
+as an untested branch.
 """
 
 from collections.abc import Sequence
@@ -58,6 +64,8 @@ class SQLAlchemyRepository[ModelT: IdentifiedBase]:
                     clauses.append(column.ilike(f"%{clause.value}%"))
                 case FilterOp.REGEX:
                     clauses.append(column.op("~")(clause.value))
+                case _:  # pragma: no cover -- FilterOp is exhaustive above
+                    raise AssertionError(clause.op)
         return clauses
 
     def _order_by(self, sort: Sequence[SortClause]) -> list[ColumnElement[Any]]:

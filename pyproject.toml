@@ -175,5 +175,5 @@ data_file = "/home/vscode/.cache/coverage/.coverage"
 # Single source of truth for the coverage gate: both the plain `pytest` run
 # (tests/unit + tests/integration) and the explicit `pytest tests/e2e` run
 # enforce this same threshold -- see CLAUDE.md's "Three test suites" section.
-fail_under = 95
+fail_under = 100
 show_missing = true

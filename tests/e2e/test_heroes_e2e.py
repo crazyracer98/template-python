@@ -106,6 +106,35 @@ def test_hero_filter_sort_and_bulk_actions(
         assert created_after.ok
         assert len(created_after.json()) == 2
 
+        created_before = page.request.get(
+            f"{base_url}/v2/heroes",
+            params={
+                "name__icontains": "Filter Test",
+                # No UTC offset -- exercises the naive-datetime path of
+                # app.controllers.crud_query._cast_datetime, distinct from
+                # created_after's tz-aware value above.
+                "created_at__max": "2999-01-01T00:00:00",
+            },
+            headers=headers,
+        )
+        assert created_before.ok
+        assert len(created_before.json()) == 2
+
+        exact_match = page.request.get(
+            f"{base_url}/v2/heroes", params={"name": "Filter Test Alpha"}, headers=headers
+        )
+        assert exact_match.ok
+        assert [hero["name"] for hero in exact_match.json()] == ["Filter Test Alpha"]
+
+        regex_match = page.request.get(
+            f"{base_url}/v2/heroes", params={"name__regex": "^Filter Test"}, headers=headers
+        )
+        assert regex_match.ok
+        assert {hero["name"] for hero in regex_match.json()} == {
+            "Filter Test Alpha",
+            "Filter Test Beta",
+        }
+
         bulk_update = page.request.patch(
             f"{base_url}/v2/heroes",
             params={"name__icontains": "Filter Test"},
@@ -149,6 +178,47 @@ def test_create_hero_with_missing_field_returns_422(
     )
     assert response.status == 422
     assert response.headers["content-type"] == "application/problem+json"
+
+
+def test_hero_list_with_invalid_filter_returns_422(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """An unrecognized filter key/op, or a value that fails to cast, is a 400-shaped 422."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+
+    unrecognized_field = page.request.get(
+        f"{base_url}/v2/heroes", params={"nonexistent_field": "x"}, headers=headers
+    )
+    assert unrecognized_field.status == 422
+    assert unrecognized_field.headers["content-type"] == "application/problem+json"
+
+    unrecognized_op = page.request.get(
+        f"{base_url}/v2/heroes", params={"name__min": "x"}, headers=headers
+    )
+    assert unrecognized_op.status == 422
+
+    invalid_value = page.request.get(
+        f"{base_url}/v2/heroes", params={"id__min": "not-a-number"}, headers=headers
+    )
+    assert invalid_value.status == 422
+
+
+def test_hero_list_with_invalid_sort_returns_422(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """An unrecognized sort field is a 422; an empty sort segment is silently skipped."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+
+    unrecognized_field = page.request.get(
+        f"{base_url}/v2/heroes", params={"sort": "nonexistent_field"}, headers=headers
+    )
+    assert unrecognized_field.status == 422
+    assert unrecognized_field.headers["content-type"] == "application/problem+json"
+
+    trailing_comma = page.request.get(
+        f"{base_url}/v2/heroes", params={"sort": "name,"}, headers=headers
+    )
+    assert trailing_comma.ok
 
 
 def test_bulk_update_and_delete_with_no_filters_and_no_id_are_rejected(

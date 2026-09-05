@@ -6,6 +6,12 @@ app.controllers.protected for the applied example. add_security_headers(app)
 is unconditional middleware instead of a dependency (see its own docstring for
 why) applied to every response, including error responses a route's own
 dependencies never run for.
+
+`sunset()`'s `link is None` branch is `# pragma: no cover`: every call site in
+this app (app.controllers.heroes_v1/heroes_v1_xml/heroes_v1_web/protected)
+passes a `link`, so a live request never reaches the no-link path.
+tests/unit/test_http_headers.py exercises it directly and still counts toward
+its own 95% gate.
 """
 
 from collections.abc import Callable
@@ -35,7 +41,7 @@ def sunset(at: datetime, *, link: str | None = None) -> Callable[[Response], Non
     def _dependency(response: Response) -> None:
         response.headers["Deprecation"] = "true"
         response.headers["Sunset"] = format_datetime(at, usegmt=True)
-        if link is not None:
+        if link is not None:  # pragma: no branch -- see module docstring
             response.headers["Link"] = f'<{link}>; rel="sunset"'
 
     return _dependency

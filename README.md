@@ -65,7 +65,7 @@ defaults), then
 
 `ruff` (lint + format), `mypy --strict`, and `pytest` are all configured
 to fail on any violation — see `pyproject.toml`. `pytest` also fails
-below 95% coverage of `src/app`, for both the default run
+below 100% coverage of `src/app`, for both the default run
 (`tests/unit` + `tests/integration`) and `uv run pytest tests/e2e`. Run
 everything at once with:
 

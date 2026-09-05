@@ -18,7 +18,7 @@ Test code is type-checked under the same `mypy --strict` settings as
 `src/` — the hook runs `uv run mypy src tests` — so tests carry full
 annotations too (ruff's `ANN` rules enforce the same).
 
-Both that run and `uv run pytest tests/e2e` independently enforce 95%
+Both that run and `uv run pytest tests/e2e` independently enforce 100%
 coverage of `src/app` (see `[tool.coverage.report]` in `pyproject.toml`)
 — e2e's coverage comes from the live `api` subprocess, not from the test
 process itself; see `e2e/README.md`.

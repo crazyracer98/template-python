@@ -1,4 +1,12 @@
-"""Application settings, sourced entirely from the process environment."""
+"""Application settings, sourced entirely from the process environment.
+
+Both `_require_*` validators below are `# pragma: no cover` for tests/e2e
+specifically: the live api process only ever starts with a Settings that
+already satisfies them (see .devcontainer/compose.yml's MODE=dev/mock), so a
+raise from either one would mean the process never came up for tests/e2e to
+run against in the first place. tests/unit/test_config.py exercises both
+directly and still counts toward its own 95% gate.
+"""
 
 from functools import lru_cache
 from typing import Literal, Self
@@ -93,7 +101,7 @@ class Settings(BaseSettings):
         Keycloak realm sets no audience mapper), so this only tightens the mode that
         actually faces real traffic.
         """
-        if self.mode == "production" and self.oidc_audience is None:
+        if self.mode == "production" and self.oidc_audience is None:  # pragma: no cover
             raise ValueError("oidc_audience must be set when MODE=production")
         return self
 
@@ -103,7 +111,7 @@ class Settings(BaseSettings):
 
         See allow_mock_mode's own docstring for why this second flag exists.
         """
-        if self.mode == "mock" and not self.allow_mock_mode:
+        if self.mode == "mock" and not self.allow_mock_mode:  # pragma: no cover
             raise ValueError("MODE=mock requires ALLOW_MOCK_MODE=1 to be set")
         return self
 

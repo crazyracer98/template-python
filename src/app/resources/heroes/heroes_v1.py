@@ -1,10 +1,11 @@
 """HTTP routes for /crud/v{ROUTER_VERSION}/heroes/v1 -- the deprecated single-power Hero shape.
 
-Deprecated in favor of /crud/v{ROUTER_VERSION}/heroes/v2 (app.controllers.heroes),
-which supports multiple powers per hero. Wraps the same CRUD app.controllers.heroes
-already builds via app.crud.compat.CompatCRUD, converting to/from the v1
-view with app.views.hero_v1's converter functions -- no new persistence
-code, only the version-compatibility shape.
+Deprecated in favor of /crud/v{ROUTER_VERSION}/heroes/v2 (heroes_v2.py), which
+supports multiple powers per hero. Wraps the same CRUD heroes_v2.py already
+builds via app.crud.compat.CompatCRUD, converting to/from the v1 view with
+app.views.hero_v1's converter functions -- no new persistence code, only the
+version-compatibility shape. `app.resources.heroes`'s `__init__.py` combines
+this with heroes_v2.py's router into the one `router` mounted in `main.py`.
 """
 
 from datetime import UTC, datetime
@@ -13,10 +14,10 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.controllers.crud_router import ROUTER_VERSION, build_resource_router
-from app.controllers.heroes import DeleteRoles, HeroCRUD, ReadRoles, WriteRoles
 from app.crud.compat import CompatCRUD
 from app.http_headers import sunset
 from app.models.hero import Hero as HeroModel
+from app.resources.heroes.heroes_v2 import DeleteRoles, HeroCRUD, ReadRoles, WriteRoles
 from app.views.hero_v1 import (
     HeroV1,
     HeroV1Create,

@@ -1,6 +1,6 @@
 """Example authenticated route, demonstrating app.oidc's auth dependency.
 
-Superseded by the role-scoped routes in app.controllers.heroes/audit, which
+Superseded by the role-scoped routes in app.resources.heroes/audit, which
 demonstrate app.oidc.require_roles instead of bare authentication -- marked
 sunset accordingly (see app.http_headers).
 """

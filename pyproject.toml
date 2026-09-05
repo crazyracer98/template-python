@@ -103,6 +103,7 @@ type = "layers"
 containers = ["app"]
 layers = [
     "main",
+    "resources",
     "controllers",
     "http_headers",
     "xml_codec",

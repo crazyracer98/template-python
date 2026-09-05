@@ -1,9 +1,10 @@
-"""HTTP routes for the Hero resource -- a worked example of the generic CRUD interface.
+"""HTTP routes for the current (v2) Hero resource -- a worked example of the generic CRUD interface.
 
 One `build_resource_router` call builds the JSON/XML/web sibling routes together
 under `/crud/v{ROUTER_VERSION}/heroes/v2/{json,xml,web}` -- see
-`crud_router.py`'s "Generic CRUD router factories" and
-docs/adrs/0009-...md`.
+`crud_router.py`'s "Generic CRUD router factories" and `docs/adrs/0009-...md`.
+`app.resources.heroes`'s `__init__.py` combines this with the deprecated
+`heroes_v1.py` sibling into the one `router` mounted in `main.py`.
 """
 
 from typing import Annotated

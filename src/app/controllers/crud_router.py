@@ -367,9 +367,10 @@ def build_resource_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseM
     """Compose build_json_router/build_xml_router/build_web_router into one resource-version router.
 
     `prefix` is the resource-version's full prefix (e.g. `/crud/v1/heroes/v2`, see
-    docs/adrs/0009-...md) -- each format is mounted under it as its own explicit
-    `/json`/`/xml`/`/web` sub-prefix, so the returned router is mounted with a bare
-    `app.include_router(router)`, no prefix computed at the call site.
+    docs/adrs/0009-...md) -- each format is mounted under it as its own explicit,
+    non-empty `/json`/`/xml`/`/web` sub-prefix, so the returned router already
+    carries its complete path and is mounted at the call site with a bare
+    `include_router(router)` -- no further prefix to add there.
 
     `router_dependencies` (e.g. app.http_headers.sunset(...) for a deprecated
     version) is applied once, on this router's own constructor -- FastAPI merges a

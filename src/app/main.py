@@ -13,13 +13,12 @@ from app.config import get_settings
 from app.controllers import (
     audit,
     health,
-    heroes,
-    heroes_v1,
     mock,
     protected,
 )
 from app.http_headers import add_security_headers
 from app.problem_details import register_problem_handlers
+from app.resources import heroes
 from app.telemetry import configure_logging
 
 settings = get_settings()
@@ -112,7 +111,6 @@ add_security_headers(app)
 
 app.include_router(health.router)
 app.include_router(heroes.router)
-app.include_router(heroes_v1.router)
 app.include_router(protected.router)
 app.include_router(audit.router)
 _mount_mode_specific_routers(app, settings.mode)

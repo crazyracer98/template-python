@@ -24,7 +24,7 @@ to, parameterized by a model type rather than one class per resource.
   `where()`/`order_by()` terms via its private `_where_clauses`/
   `_order_by` helpers.
 - `memory.py` — `InMemoryRepository[ModelT]`, a dict-backed implementation
-  used when `MODE=mock` (see `app.controllers.heroes.get_hero_crud`) so the
+  used when `MODE=mock` (see `app.resources.heroes.get_hero_crud`) so the
   app needs no database to boot. Matches `sqlalchemy.py`'s shape, but also
   sets `created_at`/`updated_at` itself since there's no server to supply
   them via `server_default`/`onupdate` — as naive UTC datetimes, matching

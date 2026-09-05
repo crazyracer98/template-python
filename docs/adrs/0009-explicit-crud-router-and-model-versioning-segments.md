@@ -97,38 +97,63 @@ call repeating it. `build_web_router`'s `api_base` (used to point the
 rendered form at the JSON API) becomes `f"{prefix}/json"`, computed once
 from the same `prefix` argument passed to `build_resource_router`, rather
 than a separately-passed string that can drift from the router's actual
-JSON path. Because the combined router carries its own full prefix, a
-resource-version's controller module is mounted with a bare
-`app.include_router(router)` in `main.py` — no prefix computed at the
-mount site.
+JSON path.
+
+A resource's version modules live together under their own package, in a
+new top-level `app.resources` (sibling to `app.controllers`, which keeps
+only the generic router factories and the handful of non-resource-specific
+routers: `health.py`, `protected.py`, `audit.py`, `mock.py`) —
+`resources/heroes/heroes_v2.py` (current), `resources/heroes/heroes_v1.py`
+(deprecated) — with the package's own `__init__.py` combining their two
+already-full-prefixed routers into the one `router` `main.py` mounts, so
+a resource stays a single `include_router` call at the mount site no
+matter how many versions it carries internally. Every `include_router`
+call that adds a real path segment states that segment's `prefix`
+explicitly (e.g. `build_resource_router`'s own `/json`/`/xml`/`/web`
+composition) — but a call whose included router already carries its own
+complete prefix takes no `prefix` argument at all, never an explicit
+empty string, since `prefix=""` reads as a segment that happens to be
+blank rather than "no segment here."
 
 `build_json_router`/`build_xml_router`/`build_web_router` themselves are
 unchanged — `build_resource_router` is a thin composition on top, so each
 remains independently usable (and independently tested) for a resource
 that genuinely only needs one format.
 
-Each resource-version collapses to one controller module: `heroes.py`
+Each resource-version collapses to one controller module: `heroes_v2.py`
 (`/crud/v1/heroes/v2/*`) and `heroes_v1.py` (`/crud/v1/heroes/v1/*`,
-`CompatCRUD`-wrapped as before), replacing six files with two.
+`CompatCRUD`-wrapped as before), replacing six files with two, both under
+one `resources/heroes/` package.
 
 ```mermaid
 graph TD
-    subgraph "heroes.py: one build_resource_router call"
-        Prefix["/crud/v{router}/heroes/v{model}"]
-        Prefix --> J["/json  (build_json_router)"]
-        Prefix --> X["/xml   (build_xml_router)"]
-        Prefix --> W["/web   (build_web_router)"]
+    subgraph "resources/heroes/ package"
+        V2["heroes_v2.py: one build_resource_router call"] --> J2["/json"]
+        V2 --> X2["/xml"]
+        V2 --> W2["/web"]
+        V1["heroes_v1.py: one build_resource_router call"] --> J1["/json"]
+        V1 --> X1["/xml"]
+        V1 --> W1["/web"]
+        Init["__init__.py: combines both into one router"]
+        Init --> V2
+        Init --> V1
     end
 ```
 
 ## Consequences
 
-A resource-version is now one controller file and one `include_router`
-call in `main.py`, not three of each — adding a new deprecated version
-(the `0002` payoff this ADR keeps) costs one views module and one
-controller module, not three. Every path segment is unambiguous about
-which axis changed: bumping `ROUTER_VERSION` never gets confused with a
-resource shape change, and vice versa.
+A resource-version is now one controller file, and a resource as a whole
+is one package (under the new `app.resources`) with one `include_router`
+call in `main.py`, not six files and three mount-site calls — adding a
+new deprecated version (the `0002` payoff this ADR keeps) costs one
+views module and one controller module dropped into the resource's
+existing package, not a new mount site. Every path segment is
+unambiguous about which axis changed: bumping `ROUTER_VERSION` never
+gets confused with a resource shape change, and vice versa. Every
+`include_router` call that adds a segment states it explicitly, and
+every call that adds none omits `prefix` rather than passing `""`, so a
+reader never mistakes "no segment" for "a segment that happens to be
+blank."
 
 The cost is a longer, more segmented URL (`/crud/v1/heroes/v2/json`
 instead of `/v2/heroes`) for every existing caller, format included —

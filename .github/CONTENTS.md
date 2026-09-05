@@ -5,6 +5,9 @@
   `README.md`.
 - `dependabot.yml` — weekly update PRs for Python deps (`uv`), GitHub
   Actions, and the Dockerfile's base images.
+- `ISSUE_TEMPLATE/` — issue forms (bug report, feature request) shown
+  when opening a new issue.
+- `PULL_REQUEST_TEMPLATE.md` — prefills the description box for new PRs.
 
 ## Do
 

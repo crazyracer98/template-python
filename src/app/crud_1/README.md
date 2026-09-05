@@ -39,8 +39,8 @@ mount site no matter how many versions it carries internally:
 
 ```python
 router = APIRouter()
-router.include_router(heroes_v2_router, prefix="/heroes/v2")
-router.include_router(heroes_v1_router, prefix="/heroes/v1")
+router.include_router(heroes_v2_router, prefix="/v2")
+router.include_router(heroes_v1_router, prefix="/v1")
 ```
 
 Both `include_router` calls above take an explicit `prefix` —
@@ -53,6 +53,25 @@ enough to never need more than one version can skip the package shape
 and stay a single flat module instead (still living here, not in
 `controllers/`) — the package layout is what a *versioned* resource
 needs, not a rule every resource follows.
+
+## Every mount names its own segment
+
+**Every `include_router` call in this repository passes an explicit,
+non-empty `prefix` argument — no exceptions.** That applies to app-level
+mounts (`app.main`), this package's resource mounts, a resource
+package's per-version mounts, and the per-format mounts inside
+`app.controllers.crud_router.build_resource_router` alike, in tests as
+well as in `src/`.
+
+The point is readability and maintainability: the full URL of any route
+should be reconstructible by reading the chain of `include_router` calls
+that mount it, without opening the included module to discover a prefix
+it carries silently. A bare `include_router(some_router)` hides a
+segment (or hides that there is none), and `prefix=""` is not a
+substitute — if a mount genuinely adds no segment, restructure so the
+segment it *should* own is named there instead. This is the mirror image
+of the "Don't" rule below: routers are built with `prefix=""` at their
+factory call, and every real segment is named at a mount site.
 
 ## API and model versioning
 
@@ -75,10 +94,8 @@ prefix=f"/crud/v{ROUTER_VERSION}")`) — a resource-version module (e.g.
 `build_resource_router`'s `prefix` argument, not even its own
 resource-relative `/heroes/v2`; every real path segment is assigned
 explicitly at the `include_router` call that mounts it (`heroes/
-__init__.py` assigns `/heroes/v2`/`/heroes/v1`, this package's own
-`__init__.py` assigns nothing further since it includes `heroes/`'s
-already-combined router bare, and `app.main` assigns
-`/crud/v{ROUTER_VERSION}`). See "Don't" below for why a router carrying
+__init__.py` assigns `/v2`/`/v1`, this package's own `__init__.py`
+assigns `/heroes`, and `app.main` assigns `/crud/v{ROUTER_VERSION}`). See "Don't" below for why a router carrying
 its own baked-in prefix is bad design. The one place a resource-version
 router still needs the full, absolute `/crud/v{ROUTER_VERSION}/...`
 path is `build_resource_router`'s `api_prefix` argument, since that gets
@@ -127,10 +144,11 @@ successor resource-version's base, full absolute path (e.g.
   call (or a single `build_json_router(...)` call directly, for a
   resource that only ever needs JSON).
 - `include_router` a new resource's router in this package's own
-  `__init__.py`, bare (no `prefix`) — its router already carries its own
-  full, resource-relative prefix (assigned explicitly by the resource's
-  own package, e.g. `heroes/__init__.py`, not baked into any individual
-  version's `build_resource_router` call).
+  `__init__.py` with an explicit `prefix` naming the resource segment
+  (e.g. `prefix="/heroes"`) — the resource's own package (e.g.
+  `heroes/__init__.py`) names only the version segments below it, and no
+  segment is ever baked into an individual version's
+  `build_resource_router` call. See "Every mount names its own segment".
 
 ## Don't
 
@@ -154,3 +172,6 @@ successor resource-version's base, full absolute path (e.g.
   in its own `/heroes/vN`, and this package's own combined router never
   bakes in `/crud/v{ROUTER_VERSION}` — that segment belongs solely at
   the mount site in `app.main`.
+- **Call `include_router` without an explicit `prefix`, or with an empty
+  `prefix=""`.** Every mount names the segment it adds — see "Every
+  mount names its own segment" above.

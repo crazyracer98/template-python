@@ -41,9 +41,12 @@ versioning" and `docs/adrs/0009-...md` for the full path shape. Its own
 `prefix` argument should always be `""` — the caller's own resource
 package (e.g. `heroes/__init__.py`) is where the real, resource-relative
 prefix gets assigned, explicitly, at the `include_router` call that
-mounts the returned router; see `../crud_1/README.md`'s "Don't" section
-for why a resource-version router baking its own prefix in here is bad
-design. `api_prefix` is separate and still needed as the full absolute
+mounts the returned router. Every `include_router` call in this
+repository passes an explicit, non-empty `prefix`, so a route's full URL
+can be read off the chain of mount sites alone; see
+`../crud_1/README.md`'s "Every mount names its own segment", and its
+"Don't" section for why a resource-version router baking its own prefix
+in here is bad design. `api_prefix` is separate and still needed as the full absolute
 path (e.g. `/crud/v1/heroes/v2`) — it only feeds `build_web_router`'s
 `api_base`, which gets baked into rendered HTML/JS at build time and
 can't be derived from a later `include_router` call's prefix the way

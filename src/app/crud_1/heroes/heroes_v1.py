@@ -6,7 +6,7 @@ app.interfaces.compat.CompatCRUD, converting to/from the v1 view with
 app.views.hero_v1's converter functions -- no new persistence code, only the
 version-compatibility shape. `prefix=""` below: this router carries none of
 its own mount prefix -- `app.crud_1.heroes`'s `__init__.py` assigns
-`/heroes/v1` explicitly, via `include_router(router, prefix=...)`, when it
+`/v1` explicitly, via `include_router(router, prefix=...)`, when it
 combines this with heroes_v2.py's router into the one `router` `app.crud_1`
 mounts at `/crud/v{ROUTER_VERSION}` in `main.py`. See `crud_1/README.md`'s
 "Don't" section for why a resource-version router should never bake in its

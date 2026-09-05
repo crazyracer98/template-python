@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Accepted — amended 2026-09-05: the Consequences below noted that an
+`include_router` call adding no segment omits `prefix`; that is no longer
+permitted. Every `include_router` call now passes an explicit, non-empty
+`prefix`, so `crud_1/__init__.py` names `/heroes` and `heroes/__init__.py`
+names `/v2`/`/v1`. The path shape this ADR decides is unchanged; see
+`src/app/crud_1/README.md`'s "Every mount names its own segment".
 
 ## Context
 

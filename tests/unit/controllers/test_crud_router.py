@@ -151,7 +151,7 @@ NoAuth = Depends(lambda: None)
 app = FastAPI()
 app.include_router(
     build_json_router(
-        prefix="/gadgets",
+        prefix="",
         tags=["gadgets"],
         resource_label="Gadget",
         schema=_Gadget,
@@ -161,11 +161,12 @@ app.include_router(
         read_roles=NoAuth,
         write_roles=NoAuth,
         delete_roles=NoAuth,
-    )
+    ),
+    prefix="/gadgets",
 )
 app.include_router(
     build_xml_router(
-        prefix="/gadgets/xml",
+        prefix="",
         tags=["gadgets"],
         resource_label="Gadget",
         item_tag="gadget",
@@ -177,11 +178,12 @@ app.include_router(
         read_roles=NoAuth,
         write_roles=NoAuth,
         delete_roles=NoAuth,
-    )
+    ),
+    prefix="/gadgets/xml",
 )
 app.include_router(
     build_web_router(
-        prefix="/gadgets",
+        prefix="",
         tags=["gadgets"],
         resource="gadget",
         api_base="/gadgets",
@@ -190,7 +192,8 @@ app.include_router(
         crud_dependency=GadgetCRUD,
         read_roles=NoAuth,
         write_roles=NoAuth,
-    )
+    ),
+    prefix="/gadgets",
 )
 
 client = TestClient(app)

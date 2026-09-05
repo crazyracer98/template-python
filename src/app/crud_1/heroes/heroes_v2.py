@@ -3,7 +3,7 @@
 One `build_resource_router` call builds the JSON/XML/web sibling routes
 together. `prefix=""` here deliberately: this router carries none of its
 own mount prefix -- `app.crud_1.heroes`'s `__init__.py` is the one that
-assigns `/heroes/v2` explicitly, via `include_router(router, prefix=...)`,
+assigns `/v2` explicitly, via `include_router(router, prefix=...)`,
 when it combines this with the deprecated `heroes_v1.py` sibling into the
 one `router` `app.crud_1` mounts. See `crud_1/README.md`'s "Don't" section
 for why a resource-version router should never bake in its own prefix.
@@ -11,30 +11,43 @@ for why a resource-version router should never bake in its own prefix.
 `crud_router.py`'s "Generic CRUD router factories" and `docs/adrs/0009-...md`.
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends
 
 from app.controllers.crud_router import ROUTER_VERSION, build_resource_router
-from app.interfaces.base import CRUDInterface
+from app.interfaces.base import CRUDInterface, OwnerScope
 from app.interfaces.dependency import build_repository_provider
 from app.models.base import DBSession
 from app.models.hero import Hero as HeroModel
-from app.oidc import require_roles
+from app.oidc import get_current_claims, require_roles
 from app.views.hero_v2 import HeroV2, HeroV2Create, HeroV2Update
 
 _hero_repository = build_repository_provider(HeroModel)
 
 
-def get_hero_crud(session: DBSession) -> CRUDInterface[HeroV2, HeroModel]:
-    """Build a request-scoped CRUD interface for Hero.
+def get_hero_crud(
+    session: DBSession, claims: Annotated[dict[str, Any], Depends(get_current_claims)]
+) -> CRUDInterface[HeroV2, HeroModel]:
+    """Build a request-scoped, owner-scoped CRUD interface for Hero.
+
+    `owner=OwnerScope("owner_id", claims["sub"], read_scoped=False)`: every
+    authenticated caller reads every hero (list/get), same as before this was
+    added, but `update`/`delete` (single or bulk) only ever reach heroes the
+    caller themselves created -- see app.interfaces.base.OwnerScope's own
+    docstring and docs/adrs/0011-owner-scoped-crud-example-resource.md for why
+    Hero uses `read_scoped=False` rather than the fully-scoped default.
 
     MODE=mock uses the shared in-memory repository instead of `session` -- an
     unused AsyncSession's commit() never opens a connection, so `session` stays a
     harmless, uniform dependency across every mode rather than needing two
     differently-signatured variants of this function.
     """
-    return CRUDInterface(schema=HeroV2, repository=_hero_repository(session))
+    return CRUDInterface(
+        schema=HeroV2,
+        repository=_hero_repository(session),
+        owner=OwnerScope("owner_id", claims["sub"], read_scoped=False),
+    )
 
 
 HeroCRUD = Annotated[CRUDInterface[HeroV2, HeroModel], Depends(get_hero_crud)]

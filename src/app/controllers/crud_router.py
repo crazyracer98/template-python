@@ -10,6 +10,11 @@ runtime type, which mypy cannot verify statically -- each such line
 carries a narrow `# type: ignore[valid-type]`. This factory's own
 signature (every parameter, `-> APIRouter`) stays fully strict-typed,
 so a caller gets real type-checking on the call itself.
+
+Record addressing is a query parameter (`?id=`), not a path segment, on every
+factory here -- see app.controllers.crud_actions for the shared "id present ->
+single record; otherwise -> filtered list, or a bulk update/delete over the
+given filters" logic each factory's routes wrap in their own response format.
 """
 
 from collections.abc import Sequence
@@ -21,6 +26,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, ValidationError
 
+from app.controllers.crud_actions import resolve_delete, resolve_list_or_get, resolve_update
+from app.controllers.crud_query import FieldFilterInfo, describe_fields
+from app.views.bulk import BulkDeleteResult, BulkUpdateResult
 from app.web_components import render_crud_component_js, render_crud_form
 from app.xml_codec import from_xml, is_list_annotation, to_xml
 
@@ -68,38 +76,54 @@ def build_json_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel
     delete_roles: Any,
     router_dependencies: Sequence[Any] = (),
 ) -> APIRouter:
-    """Build the standard list/create/get/update/delete JSON router for one resource."""
+    """Build the standard list/create/get/update/delete JSON router for one resource.
+
+    `id`, when present as a query parameter, addresses a single record on the
+    GET/PATCH/DELETE routes (404 if missing) -- otherwise GET lists (optionally
+    filtered/sorted per app.controllers.crud_query) and PATCH/DELETE act in bulk
+    over whatever filters are given, rejecting an empty filter set with no `id`
+    (400) so an empty query string can never target every record by accident.
+    """
     router = APIRouter(prefix=prefix, tags=list(tags), dependencies=list(router_dependencies))
     not_found = f"{resource_label} not found"
 
     @router.get("", dependencies=[read_roles])
-    async def list_records(crud: crud_dependency, skip: int = 0, limit: int = 100) -> list[schema]:  # type: ignore[valid-type]
-        return await crud.list(skip=skip, limit=limit)  # type: ignore[no-any-return]
+    async def list_records(
+        crud: crud_dependency,
+        request: Request,
+        id: int | None = None,  # noqa: A002
+        skip: int = 0,
+        limit: int = 100,
+    ) -> schema | list[schema]:  # type: ignore[valid-type]
+        return await resolve_list_or_get(  # type: ignore[no-any-return]
+            crud, schema, request, id=id, skip=skip, limit=limit, not_found=not_found
+        )
 
     @router.post("", status_code=status.HTTP_201_CREATED, dependencies=[write_roles])
     async def create_record(record: create_schema, crud: crud_dependency) -> schema:  # type: ignore[valid-type]
         return await crud.create(record)  # type: ignore[no-any-return]
 
-    @router.get("/{record_id:int}", dependencies=[read_roles])
-    async def get_record(record_id: int, crud: crud_dependency) -> schema:  # type: ignore[valid-type]
-        record = await crud.get(record_id)
-        if record is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
-        return record  # type: ignore[no-any-return]
+    @router.get("/filters", dependencies=[read_roles])
+    async def list_filters() -> list[FieldFilterInfo]:
+        return describe_fields(schema)
 
-    @router.patch("/{record_id:int}", dependencies=[write_roles])
-    async def update_record(record_id: int, record: update_schema, crud: crud_dependency) -> schema:  # type: ignore[valid-type]
-        updated = await crud.update(record_id, record)
-        if updated is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
-        return updated  # type: ignore[no-any-return]
+    @router.patch("", dependencies=[write_roles])
+    async def update_records(
+        crud: crud_dependency,
+        request: Request,
+        record: update_schema,  # type: ignore[valid-type]
+        id: int | None = None,  # noqa: A002
+    ) -> schema | BulkUpdateResult:  # type: ignore[valid-type]
+        return await resolve_update(crud, schema, request, id=id, data=record, not_found=not_found)  # type: ignore[no-any-return]
 
-    @router.delete(
-        "/{record_id:int}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[delete_roles]
-    )
-    async def delete_record(record_id: int, crud: crud_dependency) -> None:
-        if not await crud.delete(record_id):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
+    @router.delete("", dependencies=[delete_roles], response_model=None)
+    async def delete_records(
+        crud: crud_dependency,
+        request: Request,
+        id: int | None = None,  # noqa: A002
+    ) -> BulkDeleteResult | Response:
+        result = await resolve_delete(crud, schema, request, id=id, not_found=not_found)
+        return result if result is not None else Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router
 
@@ -111,6 +135,7 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
     resource_label: str,
     item_tag: str,
     list_tag: str,
+    schema: type[SchemaT],
     create_schema: type[CreateT],
     update_schema: type[UpdateT],
     crud_dependency: Any,
@@ -119,17 +144,27 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
     delete_roles: Any,
     router_dependencies: Sequence[Any] = (),
 ) -> APIRouter:
-    """Build the XML-flavored sibling of build_json_router's five routes."""
+    """Build the XML-flavored sibling of build_json_router's routes, id/filter/bulk included."""
     router = APIRouter(prefix=prefix, tags=list(tags), dependencies=list(router_dependencies))
     not_found = f"{resource_label} not found"
     xml_media_type = "application/xml"
 
     @router.get("", dependencies=[read_roles])
     async def list_records_xml(
-        crud: crud_dependency, response: Response, skip: int = 0, limit: int = 100
+        crud: crud_dependency,
+        request: Request,
+        response: Response,
+        id: int | None = None,  # noqa: A002
+        skip: int = 0,
+        limit: int = 100,
     ) -> Response:
-        records = await crud.list(skip=skip, limit=limit)
-        body = f"<{list_tag}>" + "".join(to_xml(r, item_tag) for r in records) + f"</{list_tag}>"
+        result = await resolve_list_or_get(
+            crud, schema, request, id=id, skip=skip, limit=limit, not_found=not_found
+        )
+        if isinstance(result, list):
+            body = f"<{list_tag}>" + "".join(to_xml(r, item_tag) for r in result) + f"</{list_tag}>"
+        else:
+            body = to_xml(result, item_tag)
         return _with_dependency_headers(response, Response(content=body, media_type=xml_media_type))
 
     @router.post("", status_code=status.HTTP_201_CREATED, dependencies=[write_roles])
@@ -147,33 +182,38 @@ def build_xml_router[SchemaT: BaseModel, CreateT: BaseModel, UpdateT: BaseModel]
             ),
         )
 
-    @router.get("/{record_id:int}", dependencies=[read_roles])
-    async def get_record_xml(record_id: int, crud: crud_dependency, response: Response) -> Response:
-        record = await crud.get(record_id)
-        if record is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
-        return _with_dependency_headers(
-            response, Response(content=to_xml(record, item_tag), media_type=xml_media_type)
-        )
-
-    @router.patch("/{record_id:int}", dependencies=[write_roles])
-    async def update_record_xml(
-        record_id: int, crud: crud_dependency, request: Request, response: Response
+    @router.patch("", dependencies=[write_roles])
+    async def update_records_xml(
+        crud: crud_dependency,
+        request: Request,
+        response: Response,
+        id: int | None = None,  # noqa: A002
     ) -> Response:
         record = _parse_xml_body(await request.body(), update_schema)
-        updated = await crud.update(record_id, record)
-        if updated is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
-        return _with_dependency_headers(
-            response, Response(content=to_xml(updated, item_tag), media_type=xml_media_type)
+        result = await resolve_update(
+            crud, schema, request, id=id, data=record, not_found=not_found
         )
+        if isinstance(result, BulkUpdateResult):
+            body = to_xml(result, "bulk-update-result")
+        else:
+            body = to_xml(result, item_tag)
+        return _with_dependency_headers(response, Response(content=body, media_type=xml_media_type))
 
-    @router.delete(
-        "/{record_id:int}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[delete_roles]
-    )
-    async def delete_record_xml(record_id: int, crud: crud_dependency) -> None:
-        if not await crud.delete(record_id):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, not_found)
+    @router.delete("", dependencies=[delete_roles])
+    async def delete_records_xml(
+        crud: crud_dependency,
+        request: Request,
+        response: Response,
+        id: int | None = None,  # noqa: A002
+    ) -> Response:
+        result = await resolve_delete(crud, schema, request, id=id, not_found=not_found)
+        if result is None:
+            built = Response(status_code=status.HTTP_204_NO_CONTENT)
+        else:
+            built = Response(
+                content=to_xml(result, "bulk-delete-result"), media_type=xml_media_type
+            )
+        return _with_dependency_headers(response, built)
 
     return router
 
@@ -197,6 +237,13 @@ def build_web_router[CreateT: BaseModel](
     ", "-joined display) is derived from `create_schema`'s own annotations via
     `is_list_annotation`, rather than passed separately -- one less value for a
     caller to keep in sync with its own view module.
+
+    The rendered web component (`app.web_components.render_crud_component_js`)
+    talks directly to `api_base` -- the sibling build_json_router's own prefix --
+    for every list/create/update/delete/filters-metadata call, so this router
+    itself only ever serves `/form` and `/components.js`; filtering/sorting/bulk
+    actions reach the UI automatically once the JSON router that `api_base`
+    points at supports them, with no separate data routes needed here.
 
     The generic `Request.form()` parsing this needs (fields aren't known until
     runtime) loses FastAPI's typed-`Form()` per-field OpenAPI documentation, so

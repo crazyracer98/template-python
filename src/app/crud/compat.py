@@ -8,12 +8,13 @@ working against the same repository/current model as the version that
 superseded it, without its own duplicated CRUD wiring.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.crud.base import CRUDInterface
+from app.repositories.filtering import FilterClause, SortClause
 
 
 class CompatCRUD[LegacySchemaT: BaseModel, SchemaT: BaseModel, ModelT]:
@@ -44,9 +45,26 @@ class CompatCRUD[LegacySchemaT: BaseModel, SchemaT: BaseModel, ModelT]:
         current = await self._crud.get(record_id)
         return self._to_legacy(current) if current is not None else None
 
-    async def list(self, *, skip: int = 0, limit: int = 100) -> list[LegacySchemaT]:
-        """Return up to `limit` records in the legacy shape, skipping the first `skip`."""
-        return [self._to_legacy(item) for item in await self._crud.list(skip=skip, limit=limit)]
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        filters: Sequence[FilterClause] = (),
+        sort: Sequence[SortClause] = (),
+    ) -> list[LegacySchemaT]:
+        """Return up to `limit` matching records in the legacy shape, skipping the first `skip`."""
+        items = await self._crud.list(skip=skip, limit=limit, filters=filters, sort=sort)
+        return [self._to_legacy(item) for item in items]
+
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:  # pragma: no cover
+        """Return how many records match the given filters.
+
+        Not called by any route yet -- reserved for a future total-count response
+        header -- so it never runs through the real HTTP stack tests/integration/
+        tests/e2e exercise. Covered directly by tests/unit/crud.
+        """
+        return await self._crud.count(filters=filters)
 
     async def create(self, data: BaseModel) -> LegacySchemaT:
         """Create a record from a legacy-shaped payload and return it in the legacy shape."""
@@ -61,3 +79,15 @@ class CompatCRUD[LegacySchemaT: BaseModel, SchemaT: BaseModel, ModelT]:
     async def delete(self, record_id: int) -> bool:
         """Delete the record with the given id; return whether it existed."""
         return await self._crud.delete(record_id)
+
+    async def update_many(
+        self, *, filters: Sequence[FilterClause], data: BaseModel
+    ) -> Sequence[LegacySchemaT]:
+        """Apply a legacy-shaped partial update to every matching record; return them."""
+        updated = await self._crud.update_many(filters=filters, data=self._from_legacy_update(data))
+        return [self._to_legacy(item) for item in updated]
+
+    async def delete_many(self, *, filters: Sequence[FilterClause]) -> Sequence[LegacySchemaT]:
+        """Delete every record matching the filters; return the records that were deleted."""
+        deleted = await self._crud.delete_many(filters=filters)
+        return [self._to_legacy(item) for item in deleted]

@@ -37,48 +37,50 @@ def test_hero_crud_lifecycle(authed: None) -> None:
         assert list_response.status_code == 200
         assert len(list_response.json()) == 1
 
-        get_response = client.get(f"/v2/heroes/{hero_id}")
+        get_response = client.get("/v2/heroes", params={"id": hero_id})
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Spider-Man"
 
-        update_response = client.patch(f"/v2/heroes/{hero_id}", json={"powers": ["Web-slinging"]})
+        update_response = client.patch(
+            "/v2/heroes", params={"id": hero_id}, json={"powers": ["Web-slinging"]}
+        )
         assert update_response.status_code == 200
         assert update_response.json()["powers"] == ["Web-slinging"]
 
-        delete_response = client.delete(f"/v2/heroes/{hero_id}")
+        delete_response = client.delete("/v2/heroes", params={"id": hero_id})
         assert delete_response.status_code == 204
 
-        missing_response = client.get(f"/v2/heroes/{hero_id}")
+        missing_response = client.get("/v2/heroes", params={"id": hero_id})
         assert missing_response.status_code == 404
     finally:
         del app.dependency_overrides[get_hero_crud]
 
 
 def test_get_missing_hero_returns_404(authed: None) -> None:
-    """GET /v2/heroes/{id} for a nonexistent id returns 404."""
+    """GET /v2/heroes?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.get("/v2/heroes/999")
+        response = client.get("/v2/heroes", params={"id": 999})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_update_missing_hero_returns_404(authed: None) -> None:
-    """PATCH /v2/heroes/{id} for a nonexistent id returns 404."""
+    """PATCH /v2/heroes?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.patch("/v2/heroes/999", json={"name": "Nobody"})
+        response = client.patch("/v2/heroes", params={"id": 999}, json={"name": "Nobody"})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404
 
 
 def test_delete_missing_hero_returns_404(authed: None) -> None:
-    """DELETE /v2/heroes/{id} for a nonexistent id returns 404."""
+    """DELETE /v2/heroes?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: _override_crud(InMemoryRepository(HeroModel))
     try:
-        response = client.delete("/v2/heroes/999")
+        response = client.delete("/v2/heroes", params={"id": 999})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404

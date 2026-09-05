@@ -80,7 +80,13 @@ known-first-party = ["app"]
 # (prefix/roles/schemas/etc, PLR0913) and pass FastAPI Depends(...)/role objects
 # through untyped (ANN401) -- both are inherent to genericizing route wiring
 # itself, not accidental complexity; see the module docstring.
-"src/app/controllers/crud_router.py" = ["ANN401", "PLR0913"]
+"src/app/controllers/crud_router.py" = ["ANN401", "PLR0913", "PLR0917"]
+# crud_actions.py's resolve_* helpers take one named parameter per piece of
+# per-route context (crud/schema/request/id/not_found/etc, PLR0913) and return
+# a schema instance or a bulk-result view depending on the id/filter branch
+# taken (ANN401) -- same generic-wiring justification as crud_router.py above;
+# see the module docstring.
+"src/app/controllers/crud_actions.py" = ["ANN401", "PLR0913"]
 
 [tool.importlinter]
 # Enforces src/app/CLAUDE.md's strict import order between app/'s directories: each

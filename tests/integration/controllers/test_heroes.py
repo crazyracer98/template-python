@@ -47,19 +47,85 @@ def test_hero_crud_lifecycle_against_real_postgres() -> None:
         assert list_response.status_code == 200
         assert any(hero["id"] == hero_id for hero in list_response.json())
 
-        get_response = client.get(f"/v2/heroes/{hero_id}")
+        get_response = client.get("/v2/heroes", params={"id": hero_id})
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Wonder Woman"
 
-        update_response = client.patch(f"/v2/heroes/{hero_id}", json={"powers": ["Lasso of truth"]})
+        update_response = client.patch(
+            "/v2/heroes", params={"id": hero_id}, json={"powers": ["Lasso of truth"]}
+        )
         assert update_response.status_code == 200
         assert update_response.json()["powers"] == ["Lasso of truth"]
     finally:
-        delete_response = client.delete(f"/v2/heroes/{hero_id}")
+        delete_response = client.delete("/v2/heroes", params={"id": hero_id})
         assert delete_response.status_code == 204
 
-    missing_response = client.get(f"/v2/heroes/{hero_id}")
+    missing_response = client.get("/v2/heroes", params={"id": hero_id})
     assert missing_response.status_code == 404
+
+
+def test_hero_filter_sort_and_bulk_actions_against_real_postgres() -> None:
+    """Filtering/sorting a list and bulk update/delete via filters work over the live app."""
+    batman = client.post(
+        "/v2/heroes", json={"name": "Batman Filter Test", "powers": ["Detective skills"]}
+    ).json()
+    batgirl = client.post(
+        "/v2/heroes", json={"name": "Batgirl Filter Test", "powers": ["Detective skills"]}
+    ).json()
+    superman = client.post(
+        "/v2/heroes", json={"name": "Superman Filter Test", "powers": ["Flight"]}
+    ).json()
+
+    try:
+        filtered = client.get("/v2/heroes", params={"name__icontains": "Filter Test"})
+        assert filtered.status_code == 200
+        assert {hero["id"] for hero in filtered.json()} == {
+            batman["id"],
+            batgirl["id"],
+            superman["id"],
+        }
+
+        sorted_response = client.get(
+            "/v2/heroes", params={"name__icontains": "Filter Test", "sort": "name"}
+        )
+        assert [hero["name"] for hero in sorted_response.json()] == [
+            "Batgirl Filter Test",
+            "Batman Filter Test",
+            "Superman Filter Test",
+        ]
+
+        bulk_update = client.patch(
+            "/v2/heroes",
+            params={"name__icontains": "Bat"},
+            json={"powers": ["Martial arts"]},
+        )
+        assert bulk_update.status_code == 200
+        body = bulk_update.json()
+        assert body["matched"] == 2
+        assert set(body["ids"]) == {batman["id"], batgirl["id"]}
+
+        assert client.get("/v2/heroes", params={"id": batman["id"]}).json()["powers"] == [
+            "Martial arts"
+        ]
+
+        bulk_delete = client.delete("/v2/heroes", params={"name__icontains": "Bat"})
+        assert bulk_delete.status_code == 200
+        assert bulk_delete.json()["matched"] == 2
+        assert client.get("/v2/heroes", params={"id": batman["id"]}).status_code == 404
+        assert client.get("/v2/heroes", params={"id": batgirl["id"]}).status_code == 404
+    finally:
+        client.delete("/v2/heroes", params={"id": batman["id"]})
+        client.delete("/v2/heroes", params={"id": batgirl["id"]})
+        client.delete("/v2/heroes", params={"id": superman["id"]})
+
+
+def test_hero_bulk_actions_with_no_filters_and_no_id_are_rejected() -> None:
+    """A bulk PATCH/DELETE with neither id nor filters is rejected, never a full-table action."""
+    update_response = client.patch("/v2/heroes", json={"name": "Should Not Apply"})
+    assert update_response.status_code == 422
+
+    delete_response = client.delete("/v2/heroes")
+    assert delete_response.status_code == 422
 
 
 async def test_write_is_committed_before_the_response_is_sent() -> None:

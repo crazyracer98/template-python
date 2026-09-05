@@ -20,7 +20,9 @@ def seeded_hero_id(page: Page, base_url: str, access_token: Callable[[str], str]
     try:
         yield hero_id
     finally:
-        page.request.delete(f"{base_url}/v2/heroes/{hero_id}", headers=maintainer_headers)
+        page.request.delete(
+            f"{base_url}/v2/heroes", params={"id": hero_id}, headers=maintainer_headers
+        )
 
 
 def test_viewer_can_read_but_not_write(
@@ -33,7 +35,9 @@ def test_viewer_can_read_but_not_write(
     assert list_response.ok
     assert any(hero["id"] == seeded_hero_id for hero in list_response.json())
 
-    get_response = page.request.get(f"{base_url}/v2/heroes/{seeded_hero_id}", headers=headers)
+    get_response = page.request.get(
+        f"{base_url}/v2/heroes", params={"id": seeded_hero_id}, headers=headers
+    )
     assert get_response.ok
 
     list_xml_response = page.request.get(f"{base_url}/v2/heroes/xml", headers=headers)
@@ -41,7 +45,7 @@ def test_viewer_can_read_but_not_write(
     assert f"<id>{seeded_hero_id}</id>" in list_xml_response.text()
 
     get_xml_response = page.request.get(
-        f"{base_url}/v2/heroes/xml/{seeded_hero_id}", headers=headers
+        f"{base_url}/v2/heroes/xml", params={"id": seeded_hero_id}, headers=headers
     )
     assert get_xml_response.ok
 
@@ -58,7 +62,8 @@ def test_viewer_can_read_but_not_write(
     assert create_response.status == 403
 
     update_response = page.request.patch(
-        f"{base_url}/v2/heroes/{seeded_hero_id}",
+        f"{base_url}/v2/heroes",
+        params={"id": seeded_hero_id},
         data={"powers": ["None"]},
         headers=headers,
         fail_on_status_code=False,
@@ -66,7 +71,10 @@ def test_viewer_can_read_but_not_write(
     assert update_response.status == 403
 
     delete_response = page.request.delete(
-        f"{base_url}/v2/heroes/{seeded_hero_id}", headers=headers, fail_on_status_code=False
+        f"{base_url}/v2/heroes",
+        params={"id": seeded_hero_id},
+        headers=headers,
+        fail_on_status_code=False,
     )
     assert delete_response.status == 403
 

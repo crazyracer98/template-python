@@ -12,6 +12,11 @@ The View layer: Pydantic schemas returned by and accepted from
 - `hero_v1.py` — the deprecated `/v1/heroes` shape and its converter
   functions to/from `hero.py`'s current shape; see the `*_vN.py`
   pattern below.
+- `bulk.py` — `BulkUpdateResult`/`BulkDeleteResult`, the response shape
+  for a bulk update/delete action (matched count plus the ids affected).
+  Plain `BaseModel` subclasses, not `ORMView`: they wrap an already-
+  validated result the controller assembles itself, not a raw ORM
+  instance `CRUDInterface` builds one of via `from_attributes`.
 
 ## IXDTF timestamps
 

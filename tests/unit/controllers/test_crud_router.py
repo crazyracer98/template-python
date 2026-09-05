@@ -5,6 +5,7 @@ pair, not tied to Hero -- mirrors how tests/unit/crud/test_compat.py tests
 CompatCRUD generically.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any
 
@@ -14,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.controllers.crud_router import build_json_router, build_web_router, build_xml_router
 from app.crud.base import CRUDInterface
+from app.repositories.filtering import FilterClause, FilterOp, SortClause
 
 
 @dataclass
@@ -48,6 +50,17 @@ class _GadgetUpdate(BaseModel):
     tags: list[str] | None = None
 
 
+def _matches(record: _GadgetRecord, clause: FilterClause) -> bool:
+    value = getattr(record, clause.field)
+    if clause.op is FilterOp.EQ:
+        return bool(value == clause.value)
+    if clause.op is FilterOp.ICONTAINS:
+        return str(clause.value).casefold() in str(value).casefold()
+    if clause.op is FilterOp.IN:
+        return value in clause.value
+    raise NotImplementedError(clause.op)
+
+
 class _FakeGadgetRepository:
     """In-memory Repository implementation, keyed by id."""
 
@@ -56,13 +69,32 @@ class _FakeGadgetRepository:
         self._records: dict[int, _GadgetRecord] = {}
         self._next_id = 1
 
+    def _matching(self, filters: Sequence[FilterClause]) -> list[_GadgetRecord]:
+        return [r for r in self._records.values() if all(_matches(r, c) for c in filters)]
+
     async def get(self, record_id: int) -> _GadgetRecord | None:
         """Return the record with the given id, or None if it doesn't exist."""
         return self._records.get(record_id)
 
-    async def list(self, *, skip: int = 0, limit: int = 100) -> list[_GadgetRecord]:
-        """Return up to `limit` records, skipping the first `skip`."""
-        return list(self._records.values())[skip : skip + limit]
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        filters: Sequence[FilterClause] = (),
+        sort: Sequence[SortClause] = (),
+    ) -> list[_GadgetRecord]:
+        """Return up to `limit` matching records, skipping the first `skip`."""
+        matching = self._matching(filters)
+        for clause in reversed(sort):
+            matching = sorted(
+                matching, key=lambda r: getattr(r, clause.field), reverse=clause.descending
+            )
+        return matching[skip : skip + limit]
+
+    async def count(self, *, filters: Sequence[FilterClause] = ()) -> int:
+        """Return how many records match the given filters."""
+        return len(self._matching(filters))
 
     async def create(self, data: dict[str, Any]) -> _GadgetRecord:
         """Create and return a new record from the given field values."""
@@ -83,6 +115,23 @@ class _FakeGadgetRepository:
     async def delete(self, record_id: int) -> bool:
         """Delete the record with the given id; return whether it existed."""
         return self._records.pop(record_id, None) is not None
+
+    async def update_many(
+        self, *, filters: Sequence[FilterClause], data: dict[str, Any]
+    ) -> Sequence[_GadgetRecord]:
+        """Apply the given field values to every record matching the filters; return them."""
+        matching = self._matching(filters)
+        for record in matching:
+            for field, value in data.items():
+                setattr(record, field, value)
+        return matching
+
+    async def delete_many(self, *, filters: Sequence[FilterClause]) -> Sequence[_GadgetRecord]:
+        """Delete every record matching the filters; return the records that were deleted."""
+        matching = self._matching(filters)
+        for record in matching:
+            del self._records[record.id]
+        return matching
 
 
 def get_gadget_crud() -> CRUDInterface[_Gadget, _GadgetRecord]:
@@ -118,6 +167,7 @@ app.include_router(
         resource_label="Gadget",
         item_tag="gadget",
         list_tag="gadgets",
+        schema=_Gadget,
         create_schema=_GadgetCreate,
         update_schema=_GadgetUpdate,
         crud_dependency=GadgetCRUD,
@@ -161,57 +211,150 @@ def test_json_router_crud_lifecycle() -> None:
         assert list_response.status_code == 200
         assert len(list_response.json()) == 1
 
-        get_response = client.get(f"/gadgets/{gadget_id}")
+        get_response = client.get("/gadgets", params={"id": gadget_id})
         assert get_response.status_code == 200
         assert get_response.json()["name"] == "Widget"
 
-        update_response = client.patch(f"/gadgets/{gadget_id}", json={"tags": ["b"]})
+        update_response = client.patch("/gadgets", params={"id": gadget_id}, json={"tags": ["b"]})
         assert update_response.status_code == 200
         assert update_response.json()["tags"] == ["b"]
 
-        delete_response = client.delete(f"/gadgets/{gadget_id}")
+        delete_response = client.delete("/gadgets", params={"id": gadget_id})
         assert delete_response.status_code == 204
 
-        missing_response = client.get(f"/gadgets/{gadget_id}")
+        missing_response = client.get("/gadgets", params={"id": gadget_id})
         assert missing_response.status_code == 404
     finally:
         del app.dependency_overrides[get_gadget_crud]
 
 
 def test_json_router_get_missing_returns_404() -> None:
-    """GET /gadgets/{id} for a nonexistent id returns 404."""
+    """GET /gadgets?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
         schema=_Gadget, repository=_FakeGadgetRepository()
     )
     try:
-        response = client.get("/gadgets/999")
+        response = client.get("/gadgets", params={"id": 999})
     finally:
         del app.dependency_overrides[get_gadget_crud]
     assert response.status_code == 404
 
 
 def test_json_router_update_missing_returns_404() -> None:
-    """PATCH /gadgets/{id} for a nonexistent id returns 404."""
+    """PATCH /gadgets?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
         schema=_Gadget, repository=_FakeGadgetRepository()
     )
     try:
-        response = client.patch("/gadgets/999", json={"name": "Nobody"})
+        response = client.patch("/gadgets", params={"id": 999}, json={"name": "Nobody"})
     finally:
         del app.dependency_overrides[get_gadget_crud]
     assert response.status_code == 404
 
 
 def test_json_router_delete_missing_returns_404() -> None:
-    """DELETE /gadgets/{id} for a nonexistent id returns 404."""
+    """DELETE /gadgets?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
         schema=_Gadget, repository=_FakeGadgetRepository()
     )
     try:
-        response = client.delete("/gadgets/999")
+        response = client.delete("/gadgets", params={"id": 999})
     finally:
         del app.dependency_overrides[get_gadget_crud]
     assert response.status_code == 404
+
+
+def test_json_router_list_applies_filters_and_sort() -> None:
+    """GET /gadgets?name=...&sort=... filters and sorts the list."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        client.post("/gadgets", json={"name": "apricot", "tags": []})
+        client.post("/gadgets", json={"name": "banana", "tags": []})
+
+        response = client.get("/gadgets", params={"name__icontains": "ap", "sort": "-name"})
+        assert response.status_code == 200
+        assert [g["name"] for g in response.json()] == ["apricot", "apple"]
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_update_via_filters() -> None:
+    """PATCH /gadgets?<filters> with no id updates every matching record."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        client.post("/gadgets", json={"name": "apricot", "tags": []})
+        client.post("/gadgets", json={"name": "banana", "tags": []})
+
+        response = client.patch(
+            "/gadgets", params={"name__icontains": "ap"}, json={"tags": ["updated"]}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["matched"] == 2
+        assert len(body["ids"]) == 2
+
+        remaining = client.get("/gadgets").json()
+        tags = sorted((g["tags"][0] if g["tags"] else "") for g in remaining)
+        assert tags == ["", "updated", "updated"]
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_delete_via_filters() -> None:
+    """DELETE /gadgets?<filters> with no id deletes every matching record."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        client.post("/gadgets", json={"name": "apricot", "tags": []})
+        client.post("/gadgets", json={"name": "banana", "tags": []})
+
+        response = client.delete("/gadgets", params={"name__icontains": "ap"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["matched"] == 2
+
+        remaining = client.get("/gadgets").json()
+        assert [g["name"] for g in remaining] == ["banana"]
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_json_router_bulk_update_with_no_filters_and_no_id_rejected() -> None:
+    """PATCH /gadgets with neither id nor filters is rejected (400), never a full-table update."""
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=_FakeGadgetRepository()
+    )
+    try:
+        response = client.patch("/gadgets", json={"name": "Nobody"})
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+    assert response.status_code == 422
+
+
+def test_json_router_bulk_delete_with_no_filters_and_no_id_rejected() -> None:
+    """DELETE /gadgets with neither id nor filters is rejected (400), never a full-table delete."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post("/gadgets", json={"name": "apple", "tags": []})
+        response = client.delete("/gadgets")
+        assert response.status_code == 422
+        assert client.get("/gadgets").json() != []
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
 
 
 def test_xml_router_crud_lifecycle() -> None:
@@ -235,11 +378,51 @@ def test_xml_router_crud_lifecycle() -> None:
         assert "<gadgets>" in list_response.text
         gadget_id = list_response.text.split("<id>")[1].split("</id>")[0]
 
-        delete_response = client.delete(f"/gadgets/xml/{gadget_id}")
+        get_response = client.get("/gadgets/xml", params={"id": gadget_id})
+        assert get_response.status_code == 200
+        assert "<name>Widget</name>" in get_response.text
+
+        delete_response = client.delete("/gadgets/xml", params={"id": gadget_id})
         assert delete_response.status_code == 204
 
-        missing_response = client.get(f"/gadgets/xml/{gadget_id}")
+        missing_response = client.get("/gadgets/xml", params={"id": gadget_id})
         assert missing_response.status_code == 404
+    finally:
+        del app.dependency_overrides[get_gadget_crud]
+
+
+def test_xml_router_bulk_update_and_delete_via_filters() -> None:
+    """PATCH/DELETE /gadgets/xml?<filters> act in bulk and render an XML bulk-result body."""
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        client.post(
+            "/gadgets/xml",
+            content="<gadget><name>apple</name><tags>a</tags></gadget>",
+            headers={"Content-Type": "application/xml"},
+        )
+        client.post(
+            "/gadgets/xml",
+            content="<gadget><name>apricot</name><tags>a</tags></gadget>",
+            headers={"Content-Type": "application/xml"},
+        )
+
+        update_response = client.patch(
+            "/gadgets/xml",
+            params={"name__icontains": "ap"},
+            content="<gadget><tags>updated</tags></gadget>",
+            headers={"Content-Type": "application/xml"},
+        )
+        assert update_response.status_code == 200
+        assert "<bulk-update-result>" in update_response.text
+        assert "<matched>2</matched>" in update_response.text
+
+        delete_response = client.delete("/gadgets/xml", params={"name__icontains": "ap"})
+        assert delete_response.status_code == 200
+        assert "<bulk-delete-result>" in delete_response.text
+        assert "<matched>2</matched>" in delete_response.text
     finally:
         del app.dependency_overrides[get_gadget_crud]
 
@@ -279,3 +462,41 @@ def test_web_router_components_js_defines_custom_elements() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/javascript")
     assert "customElements.define" in response.text
+
+
+def test_json_router_filters_metadata_describes_every_filterable_field() -> None:
+    """GET /gadgets/filters describes every filterable field's kind and ops."""
+    response = client.get("/gadgets/filters")
+    assert response.status_code == 200
+    by_name = {info["name"]: info for info in response.json()}
+    assert "tags" not in by_name  # list fields aren't filterable
+    assert by_name["name"]["kind"] == "string"
+    assert set(by_name["name"]["ops"]) == {"eq", "contains", "icontains", "regex"}
+    assert by_name["id"]["kind"] == "number"
+
+
+def test_web_component_bulk_ui_reaches_the_json_router() -> None:
+    """The rendered web component's bulk-delete call (id__in=) works against the JSON router.
+
+    The web router itself has no data routes -- its JS fetches directly against
+    api_base (the sibling JSON router's own prefix), so this exercises that the
+    two routers' contracts actually line up end to end, not just that each
+    factory's routes work in isolation.
+    """
+    repository = _FakeGadgetRepository()
+    app.dependency_overrides[get_gadget_crud] = lambda: CRUDInterface(
+        schema=_Gadget, repository=repository
+    )
+    try:
+        first = client.post("/gadgets", json={"name": "apple", "tags": []}).json()
+        second = client.post("/gadgets", json={"name": "apricot", "tags": []}).json()
+        client.post("/gadgets", json={"name": "banana", "tags": []})
+
+        response = client.delete("/gadgets", params={"id__in": f"{first['id']},{second['id']}"})
+        assert response.status_code == 200
+        assert response.json()["matched"] == 2
+
+        remaining = client.get("/gadgets").json()
+        assert [g["name"] for g in remaining] == ["banana"]
+    finally:
+        del app.dependency_overrides[get_gadget_crud]

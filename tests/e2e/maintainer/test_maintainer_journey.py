@@ -28,17 +28,22 @@ def test_maintainer_has_full_hero_lifecycle_but_not_audit(
     assert any(hero["id"] == hero_id for hero in list_response.json())
 
     xml_update_response = page.request.patch(
-        f"{base_url}/v2/heroes/xml/{hero_id}",
+        f"{base_url}/v2/heroes/xml",
+        params={"id": hero_id},
         data="<hero><powers>Time manipulation</powers></hero>",
         headers={**headers, "Content-Type": "application/xml"},
     )
     assert xml_update_response.ok
 
-    get_response = page.request.get(f"{base_url}/v2/heroes/{hero_id}", headers=headers)
+    get_response = page.request.get(
+        f"{base_url}/v2/heroes", params={"id": hero_id}, headers=headers
+    )
     assert get_response.ok
     assert get_response.json()["powers"] == ["Time manipulation"]
 
-    delete_response = page.request.delete(f"{base_url}/v2/heroes/{hero_id}", headers=headers)
+    delete_response = page.request.delete(
+        f"{base_url}/v2/heroes", params={"id": hero_id}, headers=headers
+    )
     assert delete_response.status == 204
 
     audit_response = page.request.get(

@@ -36,13 +36,29 @@ factory takes `crud_dependency` as an `Annotated[app.crud.base.CRUDLike[...],
 Depends(...)]`-shaped value — `CRUDLike` is a `Protocol` both
 `CRUDInterface` (current version) and `CompatCRUD` (deprecated version,
 see "API and model versioning" below) satisfy structurally, so the same
-three factories build both. A route whose path could otherwise collide
-with a resource's `/{record_id}` route (e.g. `/heroes/xml`) needs that id
-parameter typed as `{record_id:int}` — Starlette's typed path converter,
-so a non-integer literal segment never matches it, regardless of router
-registration order; the factories do this uniformly, so every resource's
-path param is named `record_id` in the generated OpenAPI docs regardless
-of the resource's own id-field name.
+three factories build both.
+
+**Record addressing, filtering/sorting, and bulk actions** (`build_json_router`/
+`build_xml_router`): a single record is addressed by an `id` query
+parameter, not a path segment — `GET/PATCH/DELETE <prefix>?id=5`, 404 if
+missing. `id` names the query key regardless of a resource's own id-field
+name, the same way every generated route used to name its path parameter
+`record_id` before addressing moved off the path. Without `id`, `GET` lists
+(optionally filtered/sorted, see
+`app.controllers.crud_query`'s module docstring for the `field__op=value`/
+`sort=` wire format) and `PATCH`/`DELETE` act in bulk over whatever filters
+are given — a request with **no** filters and no `id` is rejected (422 via
+`RequestValidationError`) rather than silently acting on every record.
+`app.controllers.crud_actions`'s `resolve_list_or_get`/`resolve_update`/
+`resolve_delete` implement this id/filter/bulk decision once, shared by both
+factories; each wraps the same calls in its own response format (JSON body
+vs. an XML-rendered `Response`). A bulk action's response
+(`app.views.bulk.BulkUpdateResult`/`BulkDeleteResult`) carries the matched
+count and the ids affected, not the full records. `build_json_router` also
+serves `GET <prefix>/filters`, the same per-field-type introspection
+`crud_query.py` uses to parse, as JSON — the `<resource>-list>` web component
+(`app.web_components`) fetches this once to render filter/sort/bulk controls
+generically, without either side hardcoding a resource's fields.
 
 The generated route functions' `crud`/`record` parameters are annotated
 with a TypeVar-bound runtime value (e.g. `create_schema`, a `type[CreateT]`

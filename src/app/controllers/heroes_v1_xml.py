@@ -12,7 +12,7 @@ from fastapi import Depends
 from app.controllers.crud_router import build_xml_router
 from app.controllers.heroes_v1 import SUNSET_AT, DeleteRoles, HeroV1CRUD, ReadRoles, WriteRoles
 from app.http_headers import sunset
-from app.views.hero_v1 import HeroV1Create, HeroV1Update
+from app.views.hero_v1 import HeroV1, HeroV1Create, HeroV1Update
 
 router = build_xml_router(
     prefix="/heroes/xml",
@@ -20,6 +20,7 @@ router = build_xml_router(
     resource_label="Hero",
     item_tag="hero",
     list_tag="heroes",
+    schema=HeroV1,
     create_schema=HeroV1Create,
     update_schema=HeroV1Update,
     crud_dependency=HeroV1CRUD,

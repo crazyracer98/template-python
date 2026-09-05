@@ -24,7 +24,8 @@ def test_editor_can_create_and_update_but_not_delete(
         hero_ids.append(json_hero_id)
 
         update_response = page.request.patch(
-            f"{base_url}/v2/heroes/{json_hero_id}",
+            f"{base_url}/v2/heroes",
+            params={"id": json_hero_id},
             data={"powers": ["Master spy"]},
             headers=headers,
         )
@@ -41,7 +42,8 @@ def test_editor_can_create_and_update_but_not_delete(
         hero_ids.append(xml_hero_id)
 
         xml_update_response = page.request.patch(
-            f"{base_url}/v2/heroes/xml/{xml_hero_id}",
+            f"{base_url}/v2/heroes/xml",
+            params={"id": xml_hero_id},
             data="<hero><powers>Precision archery</powers></hero>",
             headers={**headers, "Content-Type": "application/xml"},
         )
@@ -64,7 +66,10 @@ def test_editor_can_create_and_update_but_not_delete(
         assert {json_hero_id, int(xml_hero_id), form_hero_id} <= listed_ids
 
         delete_response = page.request.delete(
-            f"{base_url}/v2/heroes/{json_hero_id}", headers=headers, fail_on_status_code=False
+            f"{base_url}/v2/heroes",
+            params={"id": json_hero_id},
+            headers=headers,
+            fail_on_status_code=False,
         )
         assert delete_response.status == 403
 
@@ -74,4 +79,6 @@ def test_editor_can_create_and_update_but_not_delete(
         assert audit_response.status == 403
     finally:
         for hero_id in hero_ids:
-            page.request.delete(f"{base_url}/v2/heroes/{hero_id}", headers=maintainer_headers)
+            page.request.delete(
+                f"{base_url}/v2/heroes", params={"id": hero_id}, headers=maintainer_headers
+            )

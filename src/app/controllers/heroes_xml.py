@@ -7,7 +7,7 @@ intra-layer import, not a cross-layer one).
 
 from app.controllers.crud_router import build_xml_router
 from app.controllers.heroes import DeleteRoles, HeroCRUD, ReadRoles, WriteRoles
-from app.views.hero import HeroCreate, HeroUpdate
+from app.views.hero import Hero, HeroCreate, HeroUpdate
 
 router = build_xml_router(
     prefix="/heroes/xml",
@@ -15,6 +15,7 @@ router = build_xml_router(
     resource_label="Hero",
     item_tag="hero",
     list_tag="heroes",
+    schema=Hero,
     create_schema=HeroCreate,
     update_schema=HeroUpdate,
     crud_dependency=HeroCRUD,

@@ -34,35 +34,37 @@ def test_hero_v1_xml_crud_lifecycle(authed: None) -> None:
         assert "<heroes>" in list_response.text
         hero_id = list_response.text.split("<id>")[1].split("</id>")[0]
 
-        get_response = client.get(f"/v1/heroes/xml/{hero_id}")
+        get_response = client.get("/v1/heroes/xml", params={"id": hero_id})
         assert get_response.status_code == 200
         assert "<name>Spider-Man</name>" in get_response.text
 
         update_response = client.patch(
-            f"/v1/heroes/xml/{hero_id}",
+            "/v1/heroes/xml",
+            params={"id": hero_id},
             content="<hero><superpower>Web-slinging</superpower></hero>",
             headers={"Content-Type": "application/xml"},
         )
         assert update_response.status_code == 200
         assert "<superpower>Web-slinging</superpower>" in update_response.text
 
-        delete_response = client.delete(f"/v1/heroes/xml/{hero_id}")
+        delete_response = client.delete("/v1/heroes/xml", params={"id": hero_id})
         assert delete_response.status_code == 204
 
-        missing_response = client.get(f"/v1/heroes/xml/{hero_id}")
+        missing_response = client.get("/v1/heroes/xml", params={"id": hero_id})
         assert missing_response.status_code == 404
     finally:
         del app.dependency_overrides[get_hero_crud]
 
 
 def test_hero_v1_xml_update_missing_returns_404(authed: None) -> None:
-    """PATCH /v1/heroes/xml/{id} for a nonexistent id returns 404."""
+    """PATCH /v1/heroes/xml?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
         schema=Hero, repository=InMemoryRepository(HeroModel)
     )
     try:
         response = client.patch(
-            "/v1/heroes/xml/999",
+            "/v1/heroes/xml",
+            params={"id": 999},
             content="<hero><name>Nobody</name></hero>",
             headers={"Content-Type": "application/xml"},
         )
@@ -72,12 +74,12 @@ def test_hero_v1_xml_update_missing_returns_404(authed: None) -> None:
 
 
 def test_hero_v1_xml_delete_missing_returns_404(authed: None) -> None:
-    """DELETE /v1/heroes/xml/{id} for a nonexistent id returns 404."""
+    """DELETE /v1/heroes/xml?id= for a nonexistent id returns 404."""
     app.dependency_overrides[get_hero_crud] = lambda: CRUDInterface(
         schema=Hero, repository=InMemoryRepository(HeroModel)
     )
     try:
-        response = client.delete("/v1/heroes/xml/999")
+        response = client.delete("/v1/heroes/xml", params={"id": 999})
     finally:
         del app.dependency_overrides[get_hero_crud]
     assert response.status_code == 404

@@ -23,31 +23,42 @@ def test_hero_v1_crud_lifecycle(
         assert list_response.ok
         assert any(hero["id"] == hero_id for hero in list_response.json())
 
-        get_response = page.request.get(f"{base_url}/v1/heroes/{hero_id}", headers=headers)
+        get_response = page.request.get(
+            f"{base_url}/v1/heroes", params={"id": hero_id}, headers=headers
+        )
         assert get_response.ok
         assert get_response.json()["name"] == "Black Panther"
 
         update_response = page.request.patch(
-            f"{base_url}/v1/heroes/{hero_id}",
+            f"{base_url}/v1/heroes",
+            params={"id": hero_id},
             data={"superpower": "Enhanced senses"},
             headers=headers,
         )
         assert update_response.ok
         assert update_response.json()["superpower"] == "Enhanced senses"
 
-        v2_response = page.request.get(f"{base_url}/v2/heroes/{hero_id}", headers=headers)
+        v2_response = page.request.get(
+            f"{base_url}/v2/heroes", params={"id": hero_id}, headers=headers
+        )
         assert v2_response.json()["powers"] == ["Enhanced senses"]
     finally:
-        delete_response = page.request.delete(f"{base_url}/v1/heroes/{hero_id}", headers=headers)
+        delete_response = page.request.delete(
+            f"{base_url}/v1/heroes", params={"id": hero_id}, headers=headers
+        )
         assert delete_response.status == 204
 
     missing_get_response = page.request.get(
-        f"{base_url}/v1/heroes/{hero_id}", headers=headers, fail_on_status_code=False
+        f"{base_url}/v1/heroes",
+        params={"id": hero_id},
+        headers=headers,
+        fail_on_status_code=False,
     )
     assert missing_get_response.status == 404
 
     missing_update_response = page.request.patch(
-        f"{base_url}/v1/heroes/{hero_id}",
+        f"{base_url}/v1/heroes",
+        params={"id": hero_id},
         data={"name": "Nobody"},
         headers=headers,
         fail_on_status_code=False,
@@ -55,9 +66,46 @@ def test_hero_v1_crud_lifecycle(
     assert missing_update_response.status == 404
 
     missing_delete_response = page.request.delete(
-        f"{base_url}/v1/heroes/{hero_id}", headers=headers, fail_on_status_code=False
+        f"{base_url}/v1/heroes",
+        params={"id": hero_id},
+        headers=headers,
+        fail_on_status_code=False,
     )
     assert missing_delete_response.status == 404
+
+
+def test_hero_v1_bulk_update_and_delete_via_filters(
+    page: Page, base_url: str, access_token: Callable[[str], str]
+) -> None:
+    """PATCH/DELETE /v1/heroes?<filters> act in bulk through the deprecated CompatCRUD wrapper."""
+    headers = {"Authorization": f"Bearer {access_token('maintainer')}"}
+    page.request.post(
+        f"{base_url}/v1/heroes",
+        data={"name": "V1 Bulk Test Alpha", "superpower": "Speed"},
+        headers=headers,
+    )
+    page.request.post(
+        f"{base_url}/v1/heroes",
+        data={"name": "V1 Bulk Test Beta", "superpower": "Speed"},
+        headers=headers,
+    )
+
+    update_response = page.request.patch(
+        f"{base_url}/v1/heroes",
+        params={"name__icontains": "V1 Bulk Test"},
+        data={"superpower": "Updated"},
+        headers=headers,
+    )
+    assert update_response.ok
+    assert update_response.json()["matched"] == 2
+
+    delete_response = page.request.delete(
+        f"{base_url}/v1/heroes",
+        params={"name__icontains": "V1 Bulk Test"},
+        headers=headers,
+    )
+    assert delete_response.ok
+    assert delete_response.json()["matched"] == 2
 
 
 def test_v1_heroes_responses_carry_deprecation_headers(

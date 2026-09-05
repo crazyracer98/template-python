@@ -231,7 +231,7 @@ sequenceDiagram
     participant Repo as repositories/sqlalchemy.py
     participant DB as Postgres
 
-    Client->>Controller: GET /v2/heroes/{id}
+    Client->>Controller: GET /v2/heroes?id={id}
     Controller->>CRUD: get(id)
     CRUD->>Repo: get(id)
     Repo->>DB: SELECT ... WHERE id = ?
@@ -244,6 +244,13 @@ sequenceDiagram
 Under `MODE=mock`, `Repo`/`DB` are replaced by
 `repositories/memory.py`'s `InMemoryRepository`, with no other layer
 changing — see "MODE (dev / mock / production)" above.
+
+`/v2/heroes` also supports schema-driven filtering/sorting (e.g.
+`?name__icontains=man&sort=-created_at`) and bulk update/delete over a
+filter set (`PATCH`/`DELETE` with no `id`) — see `controllers/README.md`'s
+"Generic CRUD router factories" and `docs/adrs/0008-generic-schema-driven-
+query-and-bulk-actions.md` for why that logic lives in the shared
+repository/CRUD layers rather than in `heroes.py` itself.
 
 Hero also carries a deprecated `/v1/heroes` sibling version, backed by
 the same data — see `controllers/README.md`'s "API and model

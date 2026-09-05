@@ -32,13 +32,24 @@ env:
 
 jobs:
   sync:
-    # A repo with no state file no-ops below (see "Read current sync
-    # state") -- which is exactly the template repo's own scheduled runs,
-    # since the template never bootstraps itself. No separate guard needed.
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
+
+      # Belt-and-suspenders against a self-sync loop: this workflow ships
+      # inside the template repo itself (crazyracer98/template-fastapi),
+      # which never has a state file, so "Read current sync state" below
+      # already no-ops there. This step additionally refuses the one path
+      # that could still set template_repo to this same repo -- a
+      # workflow_dispatch bootstrap run fired against the template repo by
+      # mistake -- so that mistake fails loudly instead of quietly seeding
+      # a state file that would sync the template to itself forever after.
+      - name: Refuse to sync a repo against itself
+        if: inputs.template_repo != '' && inputs.template_repo == github.repository
+        run: |
+          echo "::error::template_repo (${{ inputs.template_repo }}) is this same repository -- refusing to bootstrap a self-sync loop." >&2
+          exit 1
 
       - name: Check sync cadence
         id: cadence
@@ -72,6 +83,12 @@ jobs:
             echo "::warning::no $STATE_FILE yet -- run this workflow manually with initial_sync_tag set."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Guard against a self-referential state file
+        if: steps.state.outputs.skip != 'true' && steps.cadence.outputs.skip != 'true' && steps.state.outputs.template_repo == github.repository
+        run: |
+          echo "::error::$STATE_FILE points template_repo at this same repository -- refusing to sync." >&2
+          exit 1
 
       - name: Fetch template tags
         id: tags

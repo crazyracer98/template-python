@@ -4,13 +4,78 @@
 # from .devcontainer/compose.yml (which runs the `develop` stage and is
 # never referenced by devcontainer.json) -- selenium is left out since
 # nothing here needs a browser driver.
+#
+# Unlike .devcontainer/compose.yml, this file leaves MODE at the runner
+# stage's own production default (Dockerfile) -- that's the whole point of
+# this smoke test -- which means it must also satisfy src/app/config.py's
+# production-only guardrails: postgres_password/s3_access_key/s3_secret_key
+# can't be left at the stack fragments' shared local-dev defaults, and
+# oidc_issuer_url must be https://. The overrides below exist only to
+# satisfy those two guardrails; they're smoke-test-only values, not real
+# secrets, and never touch the shared .devcontainer/stack fragments (whose
+# local-dev defaults stay exactly as-is for the devcontainer itself).
+# redis needs no override, so it's the only fragment still pulled in via
+# include:. postgres/s3/keycloak need credential/TLS overrides below, and
+# `include:` (unlike `extends:`) deliberately errors on any field conflict
+# with an included service instead of merging -- so those three are
+# extended per-service instead (see each service below).
 include:
-  - ./.devcontainer/stack/postgres/compose.yml
-  - ./.devcontainer/stack/s3/compose.yml
-  - ./.devcontainer/stack/keycloak/compose.yml
   - ./.devcontainer/stack/redis/compose.yml
 
+x-smoke-postgres-password: &smoke_postgres_password smoke-only-postgres-pw
+x-smoke-s3-access-key: &smoke_s3_access_key smoke-only-access-key
+x-smoke-s3-secret-key: &smoke_s3_secret_key smoke-only-secret-key-000
+
 services:
+  # One-shot: generates a self-signed cert for Keycloak so oidc_issuer_url
+  # can be https:// (config.py's production guardrail) with the OIDC health
+  # check's discovery request (app.health.checks.OIDCHealthCheck) actually
+  # able to complete a TLS handshake against it. SAN must match the
+  # in-network hostname ("keycloak") since that's what both Keycloak's own
+  # https listener and the api container's discovery request use.
+  keycloak-tls-cert:
+    image: alpine/openssl:latest
+    entrypoint: ["sh", "-c"]
+    command:
+      # chmod: this container runs as root, but Keycloak's image runs as
+      # uid 1000 (see stack/keycloak/compose.yml) -- world-readable is fine
+      # for a self-signed, 1-day, CI-only cert with no real-world value.
+      - >-
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1
+        -keyout /tls/keycloak.key -out /tls/keycloak.crt
+        -subj /CN=keycloak -addext subjectAltName=DNS:keycloak
+        && chmod 644 /tls/keycloak.key /tls/keycloak.crt
+    volumes:
+      - keycloak-tls:/tls
+
+  postgres:
+    extends:
+      file: ./.devcontainer/stack/postgres/compose.yml
+      service: postgres
+    environment:
+      POSTGRES_PASSWORD: *smoke_postgres_password
+
+  s3:
+    extends:
+      file: ./.devcontainer/stack/s3/compose.yml
+      service: s3
+    environment:
+      RUSTFS_ACCESS_KEY: *smoke_s3_access_key
+      RUSTFS_SECRET_KEY: *smoke_s3_secret_key
+
+  keycloak:
+    extends:
+      file: ./.devcontainer/stack/keycloak/compose.yml
+      service: keycloak
+    volumes:
+      - keycloak-tls:/opt/keycloak/tls:ro
+    environment:
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/tls/keycloak.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/tls/keycloak.key
+    depends_on:
+      keycloak-tls-cert:
+        condition: service_completed_successfully
+
   api:
     build:
       context: .
@@ -30,6 +95,20 @@ services:
       POSTGRES_PORT: "5432"
       S3_ENDPOINT_URL: http://s3:9000
       REDIS_URL: redis://redis:6379/0
+      # Match the postgres/s3 overrides above -- see this file's header
+      # comment for why these can't stay at the shared stack defaults.
+      POSTGRES_PASSWORD: *smoke_postgres_password
+      RUSTFS_ACCESS_KEY: *smoke_s3_access_key
+      RUSTFS_SECRET_KEY: *smoke_s3_secret_key
+      # keycloak's https listener (see keycloak-tls-cert above) uses a
+      # self-signed cert; SSL_CERT_FILE is honored by httpx's default SSL
+      # context (httpx._config.create_ssl_context) so the OIDC health
+      # check's discovery request trusts it instead of failing TLS
+      # verification against the usual public CA bundle.
+      OIDC_ISSUER_URL: https://keycloak:8443/realms/template-fastapi
+      SSL_CERT_FILE: /tls/keycloak.crt
+    volumes:
+      - keycloak-tls:/tls:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,6 +118,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      keycloak-tls-cert:
+        condition: service_completed_successfully
     # No curl/wget in the runner image (slim base, nothing installed beyond
     # the venv -- see scripts/runner-setup.sh), so this shells out to the
     # venv's own Python instead. A non-2xx response (e.g. 503 while a
@@ -61,3 +142,12 @@ services:
       # from sibling containers. This file lives outside .devcontainer/ and
       # exists to be curled from the GitHub Actions runner (host).
       - "8000:8000"
+
+volumes:
+  keycloak-tls:
+  # extends: (unlike include:) only copies the named service's own config,
+  # not the extended file's top-level volumes: section -- these two must be
+  # declared here too, matching what postgres/compose.yml and s3/compose.yml
+  # declare for the same named volumes.
+  postgres-data:
+  s3-data:

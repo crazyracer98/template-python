@@ -45,6 +45,49 @@ plain anonymous volume at `/ssh-agent` instead of erroring — `ssh`/`git`
 inside the container then fall back to failing the way they did before
 this was added, which is harmless there since CI never pushes.
 
+### Windows
+
+Launching VS Code the normal way (Start Menu, a desktop shortcut, or
+"Open Folder") starts it with no `SSH_AUTH_SOCK` at all — Windows has
+no such environment variable, even with an agent (Git Bash's own, or
+the Windows OpenSSH Authentication Agent service) already holding your
+keys — so this always hits the degraded-mount path above, silently, and
+`git push`/`pull` inside the container has no key material to
+authenticate with no matter what's in your Windows `~/.ssh`.
+
+With Docker Desktop's WSL2 backend (not the Hyper-V backend — that one
+has no comparable path), fix this by running the agent inside a WSL2
+distro instead, since that's the same Linux environment Docker Desktop
+runs containers in and shares socket/filesystem access with:
+
+1. Make sure a real, user-facing WSL2 distro (e.g. Ubuntu — not just
+   the internal `docker-desktop` one) is installed and enabled under
+   Docker Desktop's Settings → Resources → WSL Integration.
+2. Inside that distro, copy your keys in from Windows and start an
+   agent:
+   ```sh
+   mkdir -p ~/.ssh && cp /mnt/c/Users/<you>/.ssh/id_ed25519* ~/.ssh/
+   chmod 700 ~/.ssh && chmod 600 ~/.ssh/id_ed25519
+   eval "$(ssh-agent -s)"
+   ssh-add ~/.ssh/id_ed25519
+   ```
+   Put the `eval`/`ssh-add` lines in `~/.bashrc` (guard with
+   `ssh-add -l >/dev/null 2>&1 ||` so it doesn't spawn a new agent every
+   shell) so this survives new terminals without repeating it by hand.
+3. From that same WSL shell, run `code .` — this opens VS Code via the
+   Remote-WSL extension first, with `SSH_AUTH_SOCK` inherited from the
+   shell that launched it.
+4. From inside that window, run "Dev Containers: Reopen in Container".
+   `${localEnv:SSH_AUTH_SOCK}` now resolves to the WSL2 agent socket
+   instead of nothing, so the bind-mount above actually carries an
+   agent through.
+
+Git Bash's own ssh-agent doesn't help here even though it holds the
+same keys: its socket is an MSYS emulation, not a real Unix socket
+Docker Desktop can bind-mount into a Linux container, and `code .` run
+from a Git Bash prompt doesn't change what environment the VS Code GUI
+process itself starts with anyway.
+
 ## Do
 
 - Add a new compose fragment's path to `compose.yml`'s own `include:`
